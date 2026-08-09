@@ -15,6 +15,11 @@ if (!QuizManagement::isValidMode($mode)) {
     $mode = QuizManagement::MODE_GUESS_WORD;
 }
 
+$source = (string)($_GET['source'] ?? QuizManagement::SOURCE_ALL);
+if (!QuizManagement::isValidSource($source)) {
+    $source = QuizManagement::SOURCE_ALL;
+}
+
 // Only decks that still exist, so a deleted tag can't empty out a round silently.
 $selectedTags = [];
 foreach (array_map('intval', (array)($_GET['tags'] ?? [])) as $tagId) {
@@ -30,13 +35,17 @@ if (!in_array($count, [0, 10, 20, 40], true)) {
     $count = 20;
 }
 
-$questions = QuizManagement::buildQuizRound($mode, $tagIds, $count > 0 ? $count : null);
+$questions = QuizManagement::buildQuizRound((int)$me['id'], $mode, $tagIds, $source, $count > 0 ? $count : null);
 
 // Carries the round's settings back to the launcher (pre-ticked) and into the
 // "play again" links.
-$settingsQuery = http_build_query(['mode' => $mode, 'tags' => $tagIds, 'count' => $count]);
+$settingsQuery = http_build_query(['mode' => $mode, 'source' => $source, 'tags' => $tagIds, 'count' => $count]);
 
 $deckLabel = $selectedTags ? implode(', ', $selectedTags) : 'All words';
+$sourceLabels = [
+    QuizManagement::SOURCE_MISSES => 'Words I miss',
+    QuizManagement::SOURCE_FLAGGED => 'Flagged words',
+];
 
 header_html(QuizManagement::modeLabel($mode));
 ?>
@@ -45,6 +54,9 @@ header_html(QuizManagement::modeLabel($mode));
   <div class="quiz-toolbar-titles">
     <h2 class="quiz-title"><?=h(QuizManagement::modeLabel($mode))?></h2>
     <span class="quiz-deck-chip"><?=h($deckLabel)?></span>
+    <?php if (isset($sourceLabels[$source])): ?>
+      <span class="quiz-deck-chip quiz-source-chip"><?=h($sourceLabels[$source])?></span>
+    <?php endif; ?>
   </div>
   <a class="button small" href="/quiz/?<?=h($settingsQuery)?>">Change settings</a>
 </div>

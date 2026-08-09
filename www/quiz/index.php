@@ -11,12 +11,21 @@ $me = current_user();
 $stats = QuizManagement::getQuizStatsForUser((int)$me['id']);
 $allTags = WordManagement::listAllTags();
 
-// Some words can't be asked in every mode — Fill in the Blank needs an example
-// sentence that actually uses the word — so show what each mode has ready.
-$readyByMode = [
-    QuizManagement::MODE_GUESS_WORD => QuizManagement::countAvailableQuestions(QuizManagement::MODE_GUESS_WORD),
-    QuizManagement::MODE_FILL_BLANK => QuizManagement::countAvailableQuestions(QuizManagement::MODE_FILL_BLANK),
-];
+$userId = (int)$me['id'];
+
+// How many questions each mode and word pool can produce. Counted across every
+// deck: narrowing to particular decks only ever shrinks these, and play.php
+// says so plainly if a round comes back empty. Both modes are counted so the
+// numbers can follow the mode the user picks without a round trip — Fill in the
+// Blank has a smaller pool, since it needs an example sentence using the word.
+$readyByMode = [];
+$readyBySource = [];
+foreach ([QuizManagement::MODE_GUESS_WORD, QuizManagement::MODE_FILL_BLANK] as $mode) {
+    foreach ([QuizManagement::SOURCE_ALL, QuizManagement::SOURCE_MISSES, QuizManagement::SOURCE_FLAGGED] as $source) {
+        $readyBySource[$mode][$source] = QuizManagement::countAvailableQuestions($userId, $mode, [], $source);
+    }
+    $readyByMode[$mode] = $readyBySource[$mode][QuizManagement::SOURCE_ALL];
+}
 
 // Pre-select whatever the user played last time (play.php links back here with
 // its settings) so a second round is one click away.
@@ -24,8 +33,27 @@ $selectedMode = (string)($_GET['mode'] ?? QuizManagement::MODE_GUESS_WORD);
 if (!QuizManagement::isValidMode($selectedMode)) {
     $selectedMode = QuizManagement::MODE_GUESS_WORD;
 }
+$selectedSource = (string)($_GET['source'] ?? QuizManagement::SOURCE_ALL);
+if (!QuizManagement::isValidSource($selectedSource)) {
+    $selectedSource = QuizManagement::SOURCE_ALL;
+}
 $selectedTagIds = array_map('intval', (array)($_GET['tags'] ?? []));
 $selectedCount = (int)($_GET['count'] ?? 20);
+
+$sourceCards = [
+    QuizManagement::SOURCE_ALL => [
+        'name' => 'All words',
+        'blurb' => 'Works through the deck, starting with whatever you have practiced least recently.',
+    ],
+    QuizManagement::SOURCE_MISSES => [
+        'name' => 'Words I miss',
+        'blurb' => 'Only words you have missed — on a flashcard, or in a quiz and not got right since.',
+    ],
+    QuizManagement::SOURCE_FLAGGED => [
+        'name' => 'Flagged words',
+        'blurb' => 'Only the words you flagged while going through the flashcards.',
+    ],
+];
 
 $modeCards = [
     QuizManagement::MODE_GUESS_WORD => [
@@ -85,6 +113,23 @@ header_html('Quiz');
     <?php endif; ?>
   </fieldset>
 
+  <fieldset class="quiz-fieldset">
+    <legend>Which words?</legend>
+    <div class="quiz-source-picks">
+      <?php foreach ($sourceCards as $source => $card): ?>
+        <label class="quiz-source-pick" data-source="<?=h($source)?>">
+          <input type="radio" name="source" value="<?=h($source)?>" <?= $selectedSource === $source ? 'checked' : '' ?>>
+          <span class="quiz-source-body">
+            <span class="quiz-source-name"><?=h($card['name'])?>
+              <span class="quiz-source-count"><?= number_format($readyBySource[$selectedMode][$source]) ?></span>
+            </span>
+            <span class="quiz-source-blurb small"><?=h($card['blurb'])?></span>
+          </span>
+        </label>
+      <?php endforeach; ?>
+    </div>
+  </fieldset>
+
   <?php if (!empty($allTags)): ?>
     <fieldset class="quiz-fieldset">
       <legend>Which decks?</legend>
@@ -117,6 +162,13 @@ header_html('Quiz');
     <a class="button" href="/review/">Back to flashcards</a>
   </div>
 </form>
+
+<script>
+  // How many questions each mode/pool pair has, so the counts beside "Which
+  // words?" follow the game the user picks.
+  const READY_BY_SOURCE = <?= json_encode($readyBySource) ?>;
+</script>
+<?= ApplicationUI::jsScript('/quiz/quiz_setup.js') ?>
 
 <?php endif; ?>
 

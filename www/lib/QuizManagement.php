@@ -28,6 +28,14 @@ class QuizManagement {
     public const RESULT_SYNONYM = 'synonym';     // a synonym we list for the word
     public const RESULT_INCORRECT = 'incorrect';
 
+    // Which words a round draws from. SOURCE_MISSES deliberately spans both
+    // halves of the app — a word you fumbled on a flashcard and a word you
+    // mistyped in a quiz are the same kind of weak spot — so its count won't
+    // match the flashcards' "Misses" tab exactly.
+    public const SOURCE_ALL = 'all';
+    public const SOURCE_MISSES = 'misses';
+    public const SOURCE_FLAGGED = 'flagged';
+
     public const POINTS_CORRECT = 10;
     public const POINTS_CLOSE = 8;
     public const POINTS_OVERRIDE = 5;            // "my answer was right anyway"
@@ -60,38 +68,59 @@ class QuizManagement {
         return $mode === self::MODE_FILL_BLANK ? 'Fill in the Blank' : 'Guess the Word';
     }
 
+    public static function isValidSource(string $source): bool {
+        return in_array($source, [self::SOURCE_ALL, self::SOURCE_MISSES, self::SOURCE_FLAGGED], true);
+    }
+
+    private static function assertValidSource(string $source): void {
+        if (!self::isValidSource($source)) {
+            throw new InvalidArgumentException('Unknown quiz word pool: ' . $source);
+        }
+    }
+
     // ===== Building a round =====
 
     /**
-     * A shuffled round of questions drawn from the chosen decks (an empty
-     * $tagIds means every word; several tag ids means the union of those decks).
-     * $limit caps the round — null takes everything available.
+     * A round of questions drawn from the chosen decks (an empty $tagIds means
+     * every word; several tag ids means the union of those decks) and the chosen
+     * pool of words — see the SOURCE_* constants. $limit caps the round; null
+     * takes everything available.
+     *
+     * Rounds are dealt least-recently-practiced first, so a second round moves
+     * on to words the first one didn't ask rather than sampling the deck afresh
+     * and leaving a long tail of words that never come up. Once the pool has
+     * been worked through, it comes back round in the same oldest-first order.
+     * The questions chosen are then shuffled so the round isn't asked in a
+     * predictable sequence.
      *
      * Each question is [word_id, prompt, hint, letters, first_letter]. The answer
      * itself is deliberately absent: the client posts what was typed to
      * recordAnswer() and the server decides.
      */
-    public static function buildQuizRound(string $mode, array $tagIds = [], ?int $limit = null): array {
-        $questions = self::availableQuestions($mode, $tagIds);
-        shuffle($questions);
+    public static function buildQuizRound(int $userId, string $mode, array $tagIds = [], string $source = self::SOURCE_ALL, ?int $limit = null): array {
+        $questions = self::availableQuestions($userId, $mode, $tagIds, $source);
         if ($limit !== null && $limit > 0 && count($questions) > $limit) {
             $questions = array_slice($questions, 0, $limit);
         }
+        shuffle($questions);
         return $questions;
     }
 
-    // How many questions the chosen decks can actually produce. Lower than the
-    // word count in Fill in the Blank, where words without a usable example
-    // sentence can't be asked at all.
-    public static function countAvailableQuestions(string $mode, array $tagIds = []): int {
-        return count(self::availableQuestions($mode, $tagIds));
+    // How many questions this pool can actually produce. Lower than the word
+    // count in Fill in the Blank, where words without a usable example sentence
+    // can't be asked at all.
+    public static function countAvailableQuestions(int $userId, string $mode, array $tagIds = [], string $source = self::SOURCE_ALL): int {
+        return count(self::availableQuestions($userId, $mode, $tagIds, $source));
     }
 
-    private static function availableQuestions(string $mode, array $tagIds): array {
+    // Every askable question in the pool, already in least-recently-practiced
+    // order.
+    private static function availableQuestions(int $userId, string $mode, array $tagIds, string $source): array {
         self::assertValidMode($mode);
+        self::assertValidSource($source);
 
         $questions = [];
-        foreach (self::fetchWordsForDecks($tagIds, $mode) as $row) {
+        foreach (self::fetchCandidateWords($userId, $mode, $tagIds, $source) as $row) {
             $question = self::buildQuestionForWord($row, $mode);
             if ($question !== null) {
                 $questions[] = $question;
@@ -100,22 +129,60 @@ class QuizManagement {
         return $questions;
     }
 
-    // Candidate words for a round: the union of the given decks (all words when
-    // no decks are named), pre-filtered to those the mode could possibly use.
-    private static function fetchWordsForDecks(array $tagIds, string $mode): array {
+    /**
+     * Candidate words for a round, oldest-practiced first: words never quizzed
+     * lead, then the longest-ago ones, with ties (same-second answers, and the
+     * whole never-quizzed group on day one) broken at random so rounds don't
+     * open with the same words every time.
+     *
+     * The quiz_attempts summary joined here does double duty — it supplies both
+     * that ordering and the "words I miss" test.
+     */
+    private static function fetchCandidateWords(int $userId, string $mode, array $tagIds, string $source): array {
         $tagIds = array_values(array_unique(array_filter(array_map('intval', $tagIds), fn($id) => $id > 0)));
 
-        $sql = 'SELECT DISTINCT w.id, w.word, w.definition, w.sentences, w.synonyms FROM words w';
-        $params = [];
+        // Two placeholders for one value: PDO's native prepares can't reuse a
+        // named parameter across the query.
+        $params = [':uid_state' => $userId, ':uid_quiz' => $userId];
+
+        $sql = "SELECT w.id, w.word, w.definition, w.sentences, w.synonyms
+                FROM words w
+                LEFT JOIN user_word_state s ON s.word_id = w.id AND s.user_id = :uid_state
+                LEFT JOIN (
+                    SELECT word_id,
+                           MAX(created_at) AS last_quizzed,
+                           MAX(CASE WHEN points_awarded > 0 THEN created_at END) AS last_right,
+                           MAX(CASE WHEN points_awarded = 0 THEN created_at END) AS last_wrong
+                    FROM quiz_attempts
+                    WHERE user_id = :uid_quiz
+                    GROUP BY word_id
+                ) qa ON qa.word_id = w.id
+                WHERE 1 = 1";
+
+        // A subquery rather than a join, so a word in two chosen decks stays one row.
         if ($tagIds) {
-            $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
-            $sql .= ' INNER JOIN word_tags wt ON wt.word_id = w.id AND wt.tag_id IN (' . $placeholders . ')';
-            $params = $tagIds;
+            $names = [];
+            foreach ($tagIds as $i => $tagId) {
+                $names[] = ':tag' . $i;
+                $params[':tag' . $i] = $tagId;
+            }
+            $sql .= ' AND w.id IN (SELECT word_id FROM word_tags WHERE tag_id IN (' . implode(',', $names) . '))';
         }
+
         if ($mode === self::MODE_FILL_BLANK) {
-            $sql .= " WHERE w.sentences IS NOT NULL AND w.sentences <> ''";
+            $sql .= " AND w.sentences IS NOT NULL AND w.sentences <> ''";
         }
-        $sql .= ' ORDER BY w.sort_order, w.id';
+
+        if ($source === self::SOURCE_FLAGGED) {
+            $sql .= ' AND s.is_flagged = 1';
+        } elseif ($source === self::SOURCE_MISSES) {
+            // Missed on a flashcard, or missed in a quiz and not since gotten right.
+            $sql .= " AND (s.last_mark = 'needs_review'
+                           OR (qa.last_wrong IS NOT NULL
+                               AND (qa.last_right IS NULL OR qa.last_wrong > qa.last_right)))";
+        }
+
+        $sql .= ' ORDER BY (qa.last_quizzed IS NULL) DESC, qa.last_quizzed ASC, RAND()';
 
         $st = self::pdo()->prepare($sql);
         $st->execute($params);
