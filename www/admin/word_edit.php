@@ -21,7 +21,7 @@ $err = $_GET['err'] ?? null;
 
 // For repopulating form after errors - get from URL parameters or the word row
 $form = [];
-foreach (['word', 'definition', 'sort_order'] as $field) {
+foreach (['word', 'definition', 'sentences', 'synonyms', 'sort_order'] as $field) {
     $form[$field] = $_GET[$field] ?? ($word[$field] ?? '');
 }
 
@@ -45,6 +45,12 @@ header_html('Edit ' . $word['word']);
     </label>
     <label>Definition
       <textarea name="definition" rows="3" required><?=h($form['definition'])?></textarea>
+    </label>
+    <label>Sentences
+      <textarea name="sentences" rows="2" placeholder="Example sentence(s) using the word (optional)"><?=h($form['sentences'])?></textarea>
+    </label>
+    <label>Synonyms
+      <input type="text" name="synonyms" value="<?=h($form['synonyms'])?>" placeholder="e.g. reduce, diminish (optional)">
     </label>
     <label>Order
       <input type="number" name="sort_order" value="<?=h((string)$form['sort_order'])?>" required>

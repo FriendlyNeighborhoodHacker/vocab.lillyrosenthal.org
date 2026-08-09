@@ -15,6 +15,8 @@
   var card = document.getElementById('flashcard');
   var wordEl = document.getElementById('card-word');
   var definitionEl = document.getElementById('card-definition');
+  var sentencesEl = document.getElementById('card-sentences');
+  var synonymsEl = document.getElementById('card-synonyms');
   var flagBtn = document.getElementById('flag-btn');
   var btnGot = document.getElementById('btn-got');
   var btnMiss = document.getElementById('btn-miss');
@@ -95,6 +97,10 @@
     card.classList.remove('flipped');
     wordEl.textContent = entry.word;
     definitionEl.textContent = entry.definition;
+    sentencesEl.textContent = entry.sentences;
+    sentencesEl.classList.toggle('hidden', !entry.sentences);
+    synonymsEl.textContent = entry.synonyms ? 'Similar: ' + entry.synonyms : '';
+    synonymsEl.classList.toggle('hidden', !entry.synonyms);
     flagBtn.classList.toggle('flagged', entry.flagged);
     flagBtn.setAttribute('aria-pressed', entry.flagged ? 'true' : 'false');
     btnPrev.disabled = idx === 0;

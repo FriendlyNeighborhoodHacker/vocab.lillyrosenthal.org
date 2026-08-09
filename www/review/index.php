@@ -27,6 +27,8 @@ $deckJson = array_map(fn($row) => [
     'id' => (int)$row['id'],
     'word' => (string)$row['word'],
     'definition' => (string)$row['definition'],
+    'sentences' => (string)($row['sentences'] ?? ''),
+    'synonyms' => (string)($row['synonyms'] ?? ''),
     'flagged' => !empty($row['is_flagged']),
 ], $deck);
 
@@ -108,6 +110,8 @@ header_html('Flashcards');
         </div>
         <div class="flashcard-face flashcard-back">
           <div class="flashcard-definition" id="card-definition"></div>
+          <div class="flashcard-sentences hidden" id="card-sentences"></div>
+          <div class="flashcard-synonyms hidden" id="card-synonyms"></div>
           <div class="flashcard-hint small">tap to see the word</div>
         </div>
       </div>

@@ -61,16 +61,19 @@ function import_query_string(array $flow): string {
  */
 function import_columns_help_html(array $flow): string {
     $intro = 'One row per word. Rows are matched to existing words (ignoring '
-        . 'capitalization), so re-importing a file updates definitions instead of '
-        . 'creating duplicates. New words are added to the end of the deck order.';
+        . 'capitalization), so re-importing a file edits the mapped fields of matched '
+        . 'words instead of creating duplicates — columns you leave unmapped are never '
+        . 'touched. New words are added to the end of the deck order.';
     $columns = [
         ['word', 'required', 'the vocabulary word'],
-        ['definition', 'required', 'what it means'],
+        ['definition', 'required*', '*for new words; existing words keep theirs if the column is unmapped'],
+        ['sentences', 'optional', 'example sentence(s) using the word; blank clears the field'],
+        ['synonyms', 'optional', 'e.g. "reduce, diminish"; blank clears the field'],
     ];
-    $example = "word,definition\n"
-        . "abate,to become less intense or widespread\n"
-        . "circumspect,wary and unwilling to take risks\n"
-        . "ephemeral,lasting for a very short time";
+    $example = "word,definition,sentences,synonyms\n"
+        . "abate,to become less intense or widespread,The storm suddenly abated.,\"subside, diminish\"\n"
+        . "circumspect,wary and unwilling to take risks,She was circumspect in her answers.,\"cautious, wary\"\n"
+        . "ephemeral,lasting for a very short time,Fame is often ephemeral.,\"fleeting, transient\"";
 
     $html = '<div class="card"><h3>What to include</h3>';
     $html .= '<p class="small">' . h($intro) . '</p>';

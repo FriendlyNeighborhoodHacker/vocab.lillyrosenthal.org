@@ -454,6 +454,21 @@ pre.import-example {
   overflow-wrap: anywhere;
 }
 .flashcard-definition { font-size: clamp(1.1rem, 3vw, 1.4rem); font-weight: 500; overflow-wrap: anywhere; }
+.flashcard-sentences {
+  font-size: clamp(0.95rem, 2.5vw, 1.1rem);
+  font-style: italic;
+  color: var(--color-ink-muted);
+  overflow-wrap: anywhere;
+}
+.flashcard-synonyms {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-soft);
+  border-radius: 999px;
+  padding: 4px 14px;
+  overflow-wrap: anywhere;
+}
 .flashcard-hint { opacity: 0.75; }
 
 .flag-btn {

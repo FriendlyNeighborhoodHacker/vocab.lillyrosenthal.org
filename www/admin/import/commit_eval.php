@@ -24,6 +24,7 @@ try {
     $parts = [];
     if ($summary['created']) $parts[] = $summary['created'] . ' created';
     if ($summary['updated']) $parts[] = $summary['updated'] . ' updated';
+    if (!empty($summary['unchanged'])) $parts[] = $summary['unchanged'] . ' unchanged';
     if ($summary['skipped']) $parts[] = $summary['skipped'] . ' skipped';
     $_SESSION['import_flash'] = $flow['title'] . ' complete: ' . ($parts ? implode(', ', $parts) : 'nothing to do') . '.';
     header('Location: ' . $flow['next']);

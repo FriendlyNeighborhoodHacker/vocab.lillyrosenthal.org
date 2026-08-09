@@ -48,7 +48,7 @@ class FlashcardProgress {
      *
      * $deckFilter: 'all', 'flagged' (user's flagged words), or 'needs_review'
      * (words whose latest mark was Need More Review).
-     * Returns rows of [id, word, definition, is_flagged, last_mark].
+     * Returns rows of [id, word, definition, sentences, synonyms, is_flagged, last_mark].
      */
     public static function getDeckForUser(int $userId, string $deckFilter = self::DECK_ALL): array {
         if (!in_array($deckFilter, [self::DECK_ALL, self::DECK_FLAGGED, self::DECK_NEEDS_REVIEW], true)) {
@@ -57,7 +57,7 @@ class FlashcardProgress {
 
         $seed = self::shuffleSeedForUser($userId);
 
-        $sql = 'SELECT w.id, w.word, w.definition,
+        $sql = 'SELECT w.id, w.word, w.definition, w.sentences, w.synonyms,
                        COALESCE(s.is_flagged, 0) AS is_flagged,
                        s.last_mark
                 FROM words w

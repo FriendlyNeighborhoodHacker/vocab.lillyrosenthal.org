@@ -8,7 +8,7 @@ $err = $_GET['err'] ?? null;
 
 // For repopulating form after errors - get from URL parameters
 $form = [];
-foreach (['word', 'definition'] as $field) {
+foreach (['word', 'definition', 'sentences', 'synonyms'] as $field) {
     if (isset($_GET[$field])) {
         $form[$field] = $_GET[$field];
     }
@@ -30,6 +30,12 @@ header_html('Add Word');
     </label>
     <label>Definition
       <textarea name="definition" rows="3" required><?=h($form['definition'] ?? '')?></textarea>
+    </label>
+    <label>Sentences
+      <textarea name="sentences" rows="2" placeholder="Example sentence(s) using the word (optional)"><?=h($form['sentences'] ?? '')?></textarea>
+    </label>
+    <label>Synonyms
+      <input type="text" name="synonyms" value="<?=h($form['synonyms'] ?? '')?>" placeholder="e.g. reduce, diminish (optional)">
     </label>
 
     <p class="small">The word is added to the end of the deck order.</p>

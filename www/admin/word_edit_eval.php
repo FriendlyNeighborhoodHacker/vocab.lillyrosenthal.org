@@ -20,11 +20,13 @@ if ($wordId <= 0 || !WordManagement::findById($wordId)) {
 
 $word = trim($_POST['word'] ?? '');
 $definition = trim($_POST['definition'] ?? '');
+$sentences = trim($_POST['sentences'] ?? '');
+$synonyms = trim($_POST['synonyms'] ?? '');
 $sortOrder = (int)($_POST['sort_order'] ?? 0);
 
 try {
     $ctx = UserContext::getLoggedInUserContext();
-    WordManagement::updateWord($ctx, $wordId, $word, $definition, $sortOrder);
+    WordManagement::updateWord($ctx, $wordId, $word, $definition, $sentences, $synonyms, $sortOrder);
     header('Location: /admin/word_edit.php?id=' . $wordId . '&msg=' . urlencode('Word updated.'));
     exit;
 } catch (Throwable $e) {
@@ -33,6 +35,8 @@ try {
         'err' => $e->getMessage(),
         'word' => $word,
         'definition' => $definition,
+        'sentences' => $sentences,
+        'synonyms' => $synonyms,
         'sort_order' => $sortOrder,
     ]);
     header('Location: /admin/word_edit.php?' . $query);

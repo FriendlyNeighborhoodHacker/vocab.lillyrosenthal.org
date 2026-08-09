@@ -22,11 +22,20 @@ class WordManagement {
         return trim($word);
     }
 
-    public static function addWord(UserContext $ctx, string $word, string $definition, ?int $sortOrder = null): int {
+    // Optional text fields (sentences, synonyms) store NULL when blank.
+    private static function normalizeOptionalText(?string $value): ?string {
+        if ($value === null) return null;
+        $value = trim($value);
+        return $value === '' ? null : $value;
+    }
+
+    public static function addWord(UserContext $ctx, string $word, string $definition, ?string $sentences = null, ?string $synonyms = null, ?int $sortOrder = null): int {
         self::assertAdmin($ctx);
 
         $word = self::normalizeWord($word);
         $definition = trim($definition);
+        $sentences = self::normalizeOptionalText($sentences);
+        $synonyms = self::normalizeOptionalText($synonyms);
         if ($word === '') {
             throw new InvalidArgumentException('Word is required.');
         }
@@ -45,20 +54,22 @@ class WordManagement {
         }
 
         $st = self::pdo()->prepare(
-            'INSERT INTO words (word, definition, sort_order, created_by_user_id) VALUES (?,?,?,?)'
+            'INSERT INTO words (word, definition, sentences, synonyms, sort_order, created_by_user_id) VALUES (?,?,?,?,?,?)'
         );
-        $st->execute([$word, $definition, $sortOrder, $ctx->id]);
+        $st->execute([$word, $definition, $sentences, $synonyms, $sortOrder, $ctx->id]);
         $id = (int)self::pdo()->lastInsertId();
 
         ActivityLog::log($ctx, 'word.create', ['word_id' => $id, 'word' => $word]);
         return $id;
     }
 
-    public static function updateWord(UserContext $ctx, int $wordId, string $word, string $definition, int $sortOrder): bool {
+    public static function updateWord(UserContext $ctx, int $wordId, string $word, string $definition, ?string $sentences, ?string $synonyms, int $sortOrder): bool {
         self::assertAdmin($ctx);
 
         $word = self::normalizeWord($word);
         $definition = trim($definition);
+        $sentences = self::normalizeOptionalText($sentences);
+        $synonyms = self::normalizeOptionalText($synonyms);
         if ($word === '') {
             throw new InvalidArgumentException('Word is required.');
         }
@@ -72,9 +83,9 @@ class WordManagement {
         }
 
         $st = self::pdo()->prepare(
-            'UPDATE words SET word = ?, definition = ?, sort_order = ? WHERE id = ?'
+            'UPDATE words SET word = ?, definition = ?, sentences = ?, synonyms = ?, sort_order = ? WHERE id = ?'
         );
-        $ok = $st->execute([$word, $definition, $sortOrder, $wordId]);
+        $ok = $st->execute([$word, $definition, $sentences, $synonyms, $sortOrder, $wordId]);
 
         if ($ok) {
             ActivityLog::log($ctx, 'word.update', ['word_id' => $wordId, 'word' => $word]);

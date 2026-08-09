@@ -14,10 +14,12 @@ require_csrf();
 
 $word = trim($_POST['word'] ?? '');
 $definition = trim($_POST['definition'] ?? '');
+$sentences = trim($_POST['sentences'] ?? '');
+$synonyms = trim($_POST['synonyms'] ?? '');
 
 try {
     $ctx = UserContext::getLoggedInUserContext();
-    WordManagement::addWord($ctx, $word, $definition);
+    WordManagement::addWord($ctx, $word, $definition, $sentences, $synonyms);
     header('Location: /admin/word_add.php?msg=' . urlencode('Added "' . $word . '". Add another?'));
     exit;
 } catch (Throwable $e) {
@@ -25,6 +27,8 @@ try {
         'err' => $e->getMessage(),
         'word' => $word,
         'definition' => $definition,
+        'sentences' => $sentences,
+        'synonyms' => $synonyms,
     ]);
     header('Location: /admin/word_add.php?' . $query);
     exit;
