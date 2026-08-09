@@ -62,20 +62,29 @@ header_html(QuizManagement::modeLabel($mode));
 </div>
 
 <?php if (empty($questions)): ?>
+  <?php $inTheseDecks = $selectedTags ? ' in the decks you picked' : ''; ?>
   <div class="card empty-deck">
-    <h2>Nothing to ask here yet</h2>
-    <?php if ($mode === QuizManagement::MODE_FILL_BLANK): ?>
+    <?php if ($source === QuizManagement::SOURCE_MISSES): ?>
+      <h2>Nothing missed<?=h($inTheseDecks)?> &#127881;</h2>
+      <p>There's nothing you've missed on a flashcard or in a quiz right now. That's the good kind of empty.</p>
+    <?php elseif ($source === QuizManagement::SOURCE_FLAGGED): ?>
+      <h2>No flagged words<?=h($inTheseDecks)?></h2>
+      <p>Tap the flag on any flashcard to collect words here, then come back and quiz on just those.</p>
+    <?php elseif ($mode === QuizManagement::MODE_FILL_BLANK): ?>
+      <h2>Nothing to ask here yet</h2>
       <p>Fill in the Blank needs words with an example sentence that uses the word,
-        and <?= $selectedTags ? 'this deck has none yet' : 'none of the words have one yet' ?>.</p>
-      <div class="actions" style="justify-content:center;">
-        <a class="button primary" href="/quiz/?<?=h($settingsQuery)?>">Pick a different game</a>
-      </div>
+        and <?= $selectedTags ? 'the decks you picked have none' : 'none of the words have one yet' ?>.</p>
     <?php else: ?>
-      <p>There are no words in <?= $selectedTags ? 'the decks you picked' : 'the word list' ?> yet.</p>
-      <div class="actions" style="justify-content:center;">
-        <a class="button primary" href="/quiz/?<?=h($settingsQuery)?>">Pick different decks</a>
-      </div>
+      <h2>Nothing to ask here yet</h2>
+      <p>There are no words<?=h($inTheseDecks)?> yet.</p>
     <?php endif; ?>
+    <div class="actions" style="justify-content:center;flex-wrap:wrap;">
+      <a class="button primary" href="/quiz/?<?=h($settingsQuery)?>">Change what you're quizzing on</a>
+      <?php if ($source !== QuizManagement::SOURCE_ALL): ?>
+        <a class="button" href="/quiz/play.php?<?=h(http_build_query(['mode' => $mode, 'tags' => $tagIds, 'count' => $count]))?>">Quiz on all words instead</a>
+      <?php endif; ?>
+      <a class="button" href="/review/">Back to flashcards</a>
+    </div>
   </div>
 <?php else: ?>
 
