@@ -46,13 +46,21 @@
       .then(function (r) { return r.json(); });
   }
 
-  // Marks piggyback their own position save; browsing with the arrows saves
-  // it separately (debounced so rapid flipping produces one write).
+  // Positions are saved per deck: TAG_ID names the deck being reviewed
+  // (null = the full deck). Marks piggyback their own position save; browsing
+  // with the arrows saves it separately (debounced so rapid flipping produces
+  // one write).
+  function positionFields(fields) {
+    fields.position = idx;
+    if (TAG_ID !== null) fields.tag = TAG_ID;
+    return fields;
+  }
+
   function schedulePositionSave() {
     if (!PERSIST_POSITION) return;
     clearTimeout(savePositionTimer);
     savePositionTimer = setTimeout(function () {
-      postForm('/review/save_position_eval.php', { position: idx })
+      postForm('/review/save_position_eval.php', positionFields({}))
         .then(function (res) {
           if (!res.ok) showToast('Could not save your place: ' + (res.error || 'unknown error'));
         })
@@ -131,7 +139,7 @@
     // Optimistic UI: advance immediately, report errors via toast.
     idx++;
     var fields = { word_id: entry.id, mark: mark };
-    if (PERSIST_POSITION) fields.position = idx;
+    if (PERSIST_POSITION) positionFields(fields);
 
     card.classList.add('leaving');
     setTimeout(function () {

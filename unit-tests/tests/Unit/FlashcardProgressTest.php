@@ -68,6 +68,54 @@ final class FlashcardProgressTest extends TestCase
         $this->assertSame(7, FlashcardProgress::deckPositionForUser($this->userCtx->id));
     }
 
+    public function testMarkWordPersistsPositionPerTagDeck(): void
+    {
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[0], ['Green']);
+        $tags = array_column(WordManagement::listAllTags(), null, 'name');
+        $greenId = (int)$tags['Green']['id'];
+
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds[0], FlashcardProgress::MARK_GOT_IT, 5, $greenId);
+
+        // The Green deck remembers its own place; the full deck is untouched.
+        $this->assertSame(5, FlashcardProgress::deckPositionForUser($this->userCtx->id, $greenId));
+        $this->assertSame(0, FlashcardProgress::deckPositionForUser($this->userCtx->id));
+
+        // And the mark itself landed regardless of which deck it came from.
+        $this->assertSame(1, FlashcardProgress::getScoreSummary($this->userCtx->id)['mastered']);
+    }
+
+    public function testSaveDeckPositionUpsertsPerTag(): void
+    {
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[0], ['Green']);
+        $tags = array_column(WordManagement::listAllTags(), null, 'name');
+        $greenId = (int)$tags['Green']['id'];
+
+        FlashcardProgress::saveDeckPosition($this->userCtx, 3, $greenId);
+        FlashcardProgress::saveDeckPosition($this->userCtx, 9, $greenId);
+        FlashcardProgress::saveDeckPosition($this->userCtx, 4);
+
+        $this->assertSame(9, FlashcardProgress::deckPositionForUser($this->userCtx->id, $greenId));
+        $this->assertSame(4, FlashcardProgress::deckPositionForUser($this->userCtx->id));
+    }
+
+    public function testShuffleResetsTagDeckPositionsToo(): void
+    {
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[0], ['Green']);
+        $tags = array_column(WordManagement::listAllTags(), null, 'name');
+        $greenId = (int)$tags['Green']['id'];
+
+        FlashcardProgress::saveDeckPosition($this->userCtx, 5, $greenId);
+        FlashcardProgress::saveDeckPosition($this->userCtx, 2);
+
+        FlashcardProgress::shuffleDeck($this->userCtx);
+        $this->assertSame(0, FlashcardProgress::deckPositionForUser($this->userCtx->id, $greenId));
+        $this->assertSame(0, FlashcardProgress::deckPositionForUser($this->userCtx->id));
+
+        FlashcardProgress::saveDeckPosition($this->userCtx, 5, $greenId);
+        FlashcardProgress::restoreOriginalOrder($this->userCtx);
+        $this->assertSame(0, FlashcardProgress::deckPositionForUser($this->userCtx->id, $greenId));
+    }
+
     public function testMarkWordRejectsUnknownMark(): void
     {
         $this->expectException(InvalidArgumentException::class);

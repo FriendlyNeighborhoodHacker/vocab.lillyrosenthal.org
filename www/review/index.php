@@ -31,10 +31,10 @@ $tagQuery = $tagId !== null ? '&tag=' . $tagId : '';
 $deck = FlashcardProgress::getDeckForUser($userId, $deckFilter, $tagId);
 $isShuffled = FlashcardProgress::isDeckShuffledForUser($userId);
 
-// Only the full, untagged deck keeps a persistent resume point; the shorter
-// filtered passes always start at the top.
-$persistPosition = ($deckFilter === FlashcardProgress::DECK_ALL && $tagId === null);
-$startAt = $persistPosition ? min(FlashcardProgress::deckPositionForUser($userId), count($deck)) : 0;
+// Each deck (the full list, and every tag deck) keeps its own resume point;
+// the flagged/misses passes shrink as you review them, so they start at the top.
+$persistPosition = ($deckFilter === FlashcardProgress::DECK_ALL);
+$startAt = $persistPosition ? min(FlashcardProgress::deckPositionForUser($userId, $tagId), count($deck)) : 0;
 
 $deckJson = array_map(fn($row) => [
     'id' => (int)$row['id'],
@@ -196,6 +196,7 @@ header_html('Flashcards');
     const DECK = <?= json_encode($deckJson, JSON_UNESCAPED_UNICODE) ?>;
     const START_AT = <?= (int)$startAt ?>;
     const PERSIST_POSITION = <?= $persistPosition ? 'true' : 'false' ?>;
+    const TAG_ID = <?= $tagId !== null ? $tagId : 'null' ?>;
     const CSRF = <?= json_encode(csrf_token()) ?>;
   </script>
   <?= ApplicationUI::jsScript('/review/review.js') ?>

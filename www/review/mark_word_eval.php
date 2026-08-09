@@ -3,6 +3,7 @@
 // client can repaint the score chip.
 require_once __DIR__ . '/../partials.php';
 require_once __DIR__ . '/../lib/FlashcardProgress.php';
+require_once __DIR__ . '/../lib/WordManagement.php';
 Application::init();
 require_login();
 
@@ -18,7 +19,11 @@ try {
     $mark = (string)($_POST['mark'] ?? '');
     $position = isset($_POST['position']) ? (int)$_POST['position'] : null;
 
-    $score = FlashcardProgress::markWord(UserContext::getLoggedInUserContext(), $wordId, $mark, $position);
+    // Which deck the position belongs to: null = the full deck.
+    $tagId = (int)($_POST['tag'] ?? 0);
+    $tagId = ($tagId > 0 && WordManagement::findTagById($tagId)) ? $tagId : null;
+
+    $score = FlashcardProgress::markWord(UserContext::getLoggedInUserContext(), $wordId, $mark, $position, $tagId);
     echo json_encode(['ok' => true, 'score' => $score]);
 } catch (\Throwable $e) {
     echo json_encode(['ok' => false, 'error' => $e->getMessage()]);

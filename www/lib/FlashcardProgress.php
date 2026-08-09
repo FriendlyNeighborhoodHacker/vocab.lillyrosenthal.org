@@ -95,10 +95,11 @@ class FlashcardProgress {
     /**
      * Record a Got it / Need More Review click: upsert the word's state row,
      * bump its counter, append a review event, and (when given) persist the
-     * user's position in the full deck. Returns the fresh score summary so
-     * the caller can repaint the score chip.
+     * user's position in the deck being reviewed — the full deck when $tagId
+     * is null, or that tag's deck. Returns the fresh score summary so the
+     * caller can repaint the score chip.
      */
-    public static function markWord(UserContext $ctx, int $wordId, string $mark, ?int $deckPosition = null): array {
+    public static function markWord(UserContext $ctx, int $wordId, string $mark, ?int $deckPosition = null, ?int $tagId = null): array {
         self::assertLoggedIn($ctx);
         self::assertValidMark($mark);
 
@@ -119,7 +120,7 @@ class FlashcardProgress {
         $st->execute([$ctx->id, $wordId, $mark]);
 
         if ($deckPosition !== null) {
-            self::saveDeckPosition($ctx, $deckPosition);
+            self::saveDeckPosition($ctx, $deckPosition, $tagId);
         }
 
         ActivityLog::log($ctx, 'word.marked', ['word_id' => $wordId, 'mark' => $mark]);
@@ -141,41 +142,60 @@ class FlashcardProgress {
         return $flagged;
     }
 
-    // Re-deal the deck: a new random seed, starting from the first card.
+    // Re-deal the deck: a new random seed, starting every deck from its first
+    // card (the seed reorders tag decks too, so their saved positions reset).
     public static function shuffleDeck(UserContext $ctx): int {
         self::assertLoggedIn($ctx);
 
         $seed = random_int(1, 2147483647);
         $st = self::pdo()->prepare('UPDATE users SET shuffle_seed = ?, deck_position = 0 WHERE id = ?');
         $st->execute([$seed, $ctx->id]);
+        self::pdo()->prepare('DELETE FROM user_deck_positions WHERE user_id = ?')->execute([$ctx->id]);
 
         ActivityLog::log($ctx, 'deck.shuffled', ['seed' => $seed]);
         return $seed;
     }
 
-    // Back to the global sort_order, starting from the first card.
+    // Back to the global sort_order, starting every deck from its first card.
     public static function restoreOriginalOrder(UserContext $ctx): void {
         self::assertLoggedIn($ctx);
 
         $st = self::pdo()->prepare('UPDATE users SET shuffle_seed = NULL, deck_position = 0 WHERE id = ?');
         $st->execute([$ctx->id]);
+        self::pdo()->prepare('DELETE FROM user_deck_positions WHERE user_id = ?')->execute([$ctx->id]);
 
         ActivityLog::log($ctx, 'deck.order_restored', []);
     }
 
-    // Persist the resume point in the full deck (piggybacks on mark saves).
-    public static function saveDeckPosition(UserContext $ctx, int $position): void {
+    // Persist the resume point (piggybacks on mark saves): the full deck when
+    // $tagId is null, otherwise that tag's deck.
+    public static function saveDeckPosition(UserContext $ctx, int $position, ?int $tagId = null): void {
         self::assertLoggedIn($ctx);
+        $position = max(0, $position);
 
-        $st = self::pdo()->prepare('UPDATE users SET deck_position = ? WHERE id = ?');
-        $st->execute([max(0, $position), $ctx->id]);
+        if ($tagId === null) {
+            $st = self::pdo()->prepare('UPDATE users SET deck_position = ? WHERE id = ?');
+            $st->execute([$position, $ctx->id]);
+        } else {
+            $st = self::pdo()->prepare(
+                'INSERT INTO user_deck_positions (user_id, tag_id, position) VALUES (?,?,?)
+                 ON DUPLICATE KEY UPDATE position = VALUES(position)'
+            );
+            $st->execute([$ctx->id, $tagId, $position]);
+        }
     }
 
-    public static function deckPositionForUser(int $userId): int {
-        $st = self::pdo()->prepare('SELECT deck_position FROM users WHERE id = ? LIMIT 1');
-        $st->execute([$userId]);
+    public static function deckPositionForUser(int $userId, ?int $tagId = null): int {
+        if ($tagId === null) {
+            $st = self::pdo()->prepare('SELECT deck_position FROM users WHERE id = ? LIMIT 1');
+            $st->execute([$userId]);
+            $row = $st->fetch();
+            return (int)($row['deck_position'] ?? 0);
+        }
+        $st = self::pdo()->prepare('SELECT position FROM user_deck_positions WHERE user_id = ? AND tag_id = ? LIMIT 1');
+        $st->execute([$userId, $tagId]);
         $row = $st->fetch();
-        return (int)($row['deck_position'] ?? 0);
+        return (int)($row['position'] ?? 0);
     }
 
     public static function isDeckShuffledForUser(int $userId): bool {
