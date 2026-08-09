@@ -6,14 +6,17 @@ require_once __DIR__ . '/UserContext.php';
 require_once __DIR__ . '/ActivityLog.php';
 require_once __DIR__ . '/WordManagement.php';
 
-// The words CSV import flow (columns: word, definition, sentences, synonyms),
-// used by the admin/import/ wizard. Rows are matched to existing words
+// The words CSV import flow (columns: word, definition, sentences, synonyms,
+// tags), used by the admin/import/ wizard. Rows are matched to existing words
 // case-insensitively: a match updates the mapped fields, no match creates a
 // new word appended to the end of the global order. Columns left unmapped are
 // never touched on existing words, so a file with only word + synonyms can
-// fill in synonyms without disturbing definitions.
+// fill in synonyms without disturbing definitions. The tags column carries
+// deck names separated by , or ; (e.g. "Green" or "White and Blue; Green");
+// unknown tags are created automatically.
 class WordCsvImport {
-    // Fields (besides the word itself) that the import can create or edit.
+    // words-table columns (besides the word itself) that the import can create
+    // or edit. Tags are handled separately (they live in word_tags).
     private const EDITABLE_FIELDS = ['definition', 'sentences', 'synonyms'];
 
     private static function pdo(): PDO {
@@ -27,6 +30,7 @@ class WordCsvImport {
             'definition' => 'Definition',
             'sentences' => 'Sentences',
             'synonyms' => 'Synonyms',
+            'tags' => 'Tags',
         ];
     }
 
@@ -35,13 +39,23 @@ class WordCsvImport {
         return trim((string)$value);
     }
 
-    // The provided fields of a row that differ from the stored word.
+    // The provided fields of a row that differ from the stored word. "tags"
+    // compares as a set (order- and case-insensitive).
     private static function changedFieldsForExistingWord(array $row, array $existing): array {
         $changed = [];
         foreach (self::EDITABLE_FIELDS as $field) {
             if (!array_key_exists($field, $row)) continue; // column not mapped
             if (self::normalized($row[$field]) !== self::normalized($existing[$field] ?? null)) {
                 $changed[] = $field;
+            }
+        }
+        if (array_key_exists('tags', $row)) {
+            $newTags = array_map('mb_strtolower', WordManagement::parseTagList((string)$row['tags']));
+            $currentTags = array_map('mb_strtolower', WordManagement::tagNamesForWord((int)$existing['id']));
+            sort($newTags);
+            sort($currentTags);
+            if ($newTags !== $currentTags) {
+                $changed[] = 'tags';
             }
         }
         return $changed;
@@ -63,7 +77,7 @@ class WordCsvImport {
             $changes = '';
 
             $data = ['word' => $word];
-            foreach (self::EDITABLE_FIELDS as $field) {
+            foreach (array_merge(self::EDITABLE_FIELDS, ['tags']) as $field) {
                 if (array_key_exists($field, $row)) {
                     $data[$field] = self::normalized($row[$field]);
                 }
@@ -152,15 +166,21 @@ class WordCsvImport {
                     $set = [];
                     $params = [];
                     foreach ($changed as $field) {
+                        if ($field === 'tags') continue; // synced below, not a words column
                         $value = self::normalized($data[$field]);
                         $set[] = "$field = ?";
                         // Blank sentences/synonyms clear the field (definition
                         // is validated non-blank above).
                         $params[] = $value === '' ? null : $value;
                     }
-                    $params[] = (int)$existing['id'];
-                    $st = $pdo->prepare('UPDATE words SET ' . implode(', ', $set) . ' WHERE id = ?');
-                    $st->execute($params);
+                    if ($set) {
+                        $params[] = (int)$existing['id'];
+                        $st = $pdo->prepare('UPDATE words SET ' . implode(', ', $set) . ' WHERE id = ?');
+                        $st->execute($params);
+                    }
+                    if (in_array('tags', $changed, true)) {
+                        WordManagement::syncWordTagLinks((int)$existing['id'], WordManagement::parseTagList((string)$data['tags']));
+                    }
                     $updated++;
                 } else {
                     $sentences = self::normalized($data['sentences'] ?? '');
@@ -176,6 +196,11 @@ class WordCsvImport {
                         $nextSortOrder,
                         $ctx->id,
                     ]);
+                    $newWordId = (int)$pdo->lastInsertId();
+                    $tagNames = WordManagement::parseTagList((string)($data['tags'] ?? ''));
+                    if ($tagNames) {
+                        WordManagement::syncWordTagLinks($newWordId, $tagNames);
+                    }
                     $nextSortOrder++;
                     $created++;
                 }

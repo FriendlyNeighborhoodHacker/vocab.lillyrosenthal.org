@@ -14,5 +14,7 @@ require_csrf();
 
 FlashcardProgress::shuffleDeck(UserContext::getLoggedInUserContext());
 
-header('Location: /review/');
+// Keep the caller's tag (deck) filter across the redirect.
+$tagId = (int)($_POST['tag'] ?? 0);
+header('Location: /review/' . ($tagId > 0 ? '?tag=' . $tagId : ''));
 exit;

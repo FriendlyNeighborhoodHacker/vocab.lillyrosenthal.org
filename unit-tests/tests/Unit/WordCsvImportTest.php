@@ -163,6 +163,67 @@ final class WordCsvImportTest extends TestCase
         $this->assertSame(2, WordManagement::countWords());
     }
 
+    // --- Tags (decks) ---
+
+    public function testCommitCreatesWordsWithTags(): void
+    {
+        $validated = WordCsvImport::validateRows([
+            ['word' => 'abate', 'definition' => 'to lessen', 'tags' => 'White and Blue'],
+            ['word' => 'verdant', 'definition' => 'green with vegetation', 'tags' => 'Green; White and Blue'],
+        ]);
+        WordCsvImport::commit($this->adminCtx, $validated);
+
+        $abate = WordManagement::findByWordText('abate');
+        $verdant = WordManagement::findByWordText('verdant');
+        $this->assertSame(['White and Blue'], WordManagement::tagNamesForWord((int)$abate['id']));
+        $this->assertSame(['Green', 'White and Blue'], WordManagement::tagNamesForWord((int)$verdant['id']));
+        $this->assertCount(2, WordManagement::listAllTags()); // tags auto-created, shared
+    }
+
+    public function testImportUpdatesTagsOnExistingWords(): void
+    {
+        $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen');
+
+        // Word + tags only: definition untouched, tags applied
+        $validated = WordCsvImport::validateRows([
+            ['word' => 'abate', 'tags' => 'Green'],
+        ]);
+        $this->assertSame('Update tags', $validated[0]['changes']);
+        $summary = WordCsvImport::commit($this->adminCtx, $validated);
+
+        $this->assertSame(1, $summary['updated']);
+        $this->assertSame(['Green'], WordManagement::tagNamesForWord($id));
+        $this->assertSame('to lessen', WordManagement::findById($id)['definition']);
+    }
+
+    public function testTagsUnchangedWhenSameSetInAnyOrderOrCase(): void
+    {
+        $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen');
+        WordManagement::setWordTags($this->adminCtx, $id, ['White and Blue', 'Green']);
+
+        $validated = WordCsvImport::validateRows([
+            ['word' => 'abate', 'tags' => 'green, WHITE AND BLUE'],
+        ]);
+        $this->assertSame('No changes', $validated[0]['changes']);
+
+        $summary = WordCsvImport::commit($this->adminCtx, $validated);
+        $this->assertSame(1, $summary['unchanged']);
+    }
+
+    public function testBlankMappedTagsClearsTags(): void
+    {
+        $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen');
+        WordManagement::setWordTags($this->adminCtx, $id, ['Green']);
+
+        $validated = WordCsvImport::validateRows([
+            ['word' => 'abate', 'tags' => ''],
+        ]);
+        $this->assertSame('Update tags', $validated[0]['changes']);
+        WordCsvImport::commit($this->adminCtx, $validated);
+
+        $this->assertSame([], WordManagement::tagNamesForWord($id));
+    }
+
     public function testCommitRequiresAdmin(): void
     {
         $nonAdmin = test_seed_user();

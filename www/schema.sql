@@ -98,6 +98,26 @@ CREATE TABLE words (
 
 CREATE INDEX idx_words_sort_order ON words(sort_order);
 
+-- ===== Tags (decks) =====
+-- Global labels on words — e.g. "White and Blue", "Green" — used to group the
+-- word list into decks that users can filter their review by. Tags are shared
+-- by everyone (progress/flags stay per-user).
+CREATE TABLE tags (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE word_tags (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  word_id INT NOT NULL,
+  tag_id INT NOT NULL,
+  UNIQUE KEY uq_wt_word_tag (word_id, tag_id),
+  KEY idx_wt_tag (tag_id),
+  CONSTRAINT fk_wt_word FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE,
+  CONSTRAINT fk_wt_tag FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- ===== Per-user word state =====
 -- One row per (user, word) the user has interacted with: the flag toggle and
 -- the running Got it / Need More Review tallies. last_mark drives the score

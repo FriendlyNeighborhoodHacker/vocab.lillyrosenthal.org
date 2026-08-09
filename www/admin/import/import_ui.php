@@ -69,11 +69,12 @@ function import_columns_help_html(array $flow): string {
         ['definition', 'required*', '*for new words; existing words keep theirs if the column is unmapped'],
         ['sentences', 'optional', 'example sentence(s) using the word; blank clears the field'],
         ['synonyms', 'optional', 'e.g. "reduce, diminish"; blank clears the field'],
+        ['tags', 'optional', 'deck name(s), separated by ; or , — e.g. "Green" or "White and Blue; Green". New tags are created automatically; blank clears the word\'s tags'],
     ];
-    $example = "word,definition,sentences,synonyms\n"
-        . "abate,to become less intense or widespread,The storm suddenly abated.,\"subside, diminish\"\n"
-        . "circumspect,wary and unwilling to take risks,She was circumspect in her answers.,\"cautious, wary\"\n"
-        . "ephemeral,lasting for a very short time,Fame is often ephemeral.,\"fleeting, transient\"";
+    $example = "word,definition,sentences,synonyms,tags\n"
+        . "abate,to become less intense or widespread,The storm suddenly abated.,\"subside, diminish\",White and Blue\n"
+        . "circumspect,wary and unwilling to take risks,She was circumspect in her answers.,\"cautious, wary\",White and Blue\n"
+        . "verdant,green with vegetation,The verdant hills rolled on.,\"lush, leafy\",Green";
 
     $html = '<div class="card"><h3>What to include</h3>';
     $html .= '<p class="small">' . h($intro) . '</p>';

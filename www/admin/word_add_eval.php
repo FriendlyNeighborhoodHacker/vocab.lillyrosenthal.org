@@ -16,10 +16,14 @@ $word = trim($_POST['word'] ?? '');
 $definition = trim($_POST['definition'] ?? '');
 $sentences = trim($_POST['sentences'] ?? '');
 $synonyms = trim($_POST['synonyms'] ?? '');
+$tags = trim($_POST['tags'] ?? '');
 
 try {
     $ctx = UserContext::getLoggedInUserContext();
-    WordManagement::addWord($ctx, $word, $definition, $sentences, $synonyms);
+    $wordId = WordManagement::addWord($ctx, $word, $definition, $sentences, $synonyms);
+    if ($tags !== '') {
+        WordManagement::setWordTags($ctx, $wordId, WordManagement::parseTagList($tags));
+    }
     header('Location: /admin/word_add.php?msg=' . urlencode('Added "' . $word . '". Add another?'));
     exit;
 } catch (Throwable $e) {
@@ -29,6 +33,7 @@ try {
         'definition' => $definition,
         'sentences' => $sentences,
         'synonyms' => $synonyms,
+        'tags' => $tags,
     ]);
     header('Location: /admin/word_add.php?' . $query);
     exit;

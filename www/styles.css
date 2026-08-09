@@ -363,6 +363,21 @@ pre.import-example {
 .deck-order { display: flex; align-items: center; gap: 8px; }
 .deck-order form { display: inline; }
 
+.deck-picker label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.deck-picker select { padding: 5px 10px; border-radius: 999px; font-size: 0.9rem; font-weight: 600; }
+
+.tag-pill {
+  display: inline-block;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin: 1px 2px 1px 0;
+  white-space: nowrap;
+}
+
 .progress-wrap { margin: 6px 0 18px; }
 .progress-track {
   height: 10px;

@@ -158,6 +158,40 @@ final class FlashcardProgressTest extends TestCase
         $this->assertTrue($differs, 'Reshuffling never changed the order');
     }
 
+    public function testDeckFilteredByTag(): void
+    {
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[0], ['Green']);
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[2], ['Green', 'White and Blue']);
+        $tags = array_column(WordManagement::listAllTags(), null, 'name');
+
+        $green = FlashcardProgress::getDeckForUser($this->userCtx->id, FlashcardProgress::DECK_ALL, (int)$tags['Green']['id']);
+        $this->assertSame(['abate', 'candor'], array_column($green, 'word'));
+
+        $whiteBlue = FlashcardProgress::getDeckForUser($this->userCtx->id, FlashcardProgress::DECK_ALL, (int)$tags['White and Blue']['id']);
+        $this->assertSame(['candor'], array_column($whiteBlue, 'word'));
+
+        // No tag filter = the whole deck
+        $this->assertCount(3, FlashcardProgress::getDeckForUser($this->userCtx->id));
+    }
+
+    public function testTagFilterCombinesWithStatusFilters(): void
+    {
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[0], ['Green']);
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[1], ['Green']);
+        $tags = array_column(WordManagement::listAllTags(), null, 'name');
+        $greenId = (int)$tags['Green']['id'];
+
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds[0], FlashcardProgress::MARK_NEEDS_REVIEW);
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds[2], FlashcardProgress::MARK_NEEDS_REVIEW); // untagged
+        FlashcardProgress::setWordFlag($this->userCtx, $this->wordIds[1], true);
+
+        $greenMisses = FlashcardProgress::getDeckForUser($this->userCtx->id, FlashcardProgress::DECK_NEEDS_REVIEW, $greenId);
+        $this->assertSame(['abate'], array_column($greenMisses, 'word'));
+
+        $greenFlagged = FlashcardProgress::getDeckForUser($this->userCtx->id, FlashcardProgress::DECK_FLAGGED, $greenId);
+        $this->assertSame(['brusque'], array_column($greenFlagged, 'word'));
+    }
+
     public function testNeedsReviewDeckFilter(): void
     {
         FlashcardProgress::markWord($this->userCtx, $this->wordIds[0], FlashcardProgress::MARK_NEEDS_REVIEW);

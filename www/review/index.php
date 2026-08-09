@@ -4,6 +4,7 @@
 // dedicated AJAX endpoints in this directory).
 require_once __DIR__ . '/../partials.php';
 require_once __DIR__ . '/../lib/FlashcardProgress.php';
+require_once __DIR__ . '/../lib/WordManagement.php';
 Application::init();
 require_login();
 
@@ -15,12 +16,24 @@ if (!in_array($deckFilter, [FlashcardProgress::DECK_ALL, FlashcardProgress::DECK
     $deckFilter = FlashcardProgress::DECK_ALL;
 }
 
-$deck = FlashcardProgress::getDeckForUser($userId, $deckFilter);
+// Optional tag ("deck") filter, e.g. only the Green cards.
+$allTags = WordManagement::listAllTags();
+$selectedTag = null;
+$requestedTagId = (int)($_GET['tag'] ?? 0);
+if ($requestedTagId > 0) {
+    $selectedTag = WordManagement::findTagById($requestedTagId);
+}
+$tagId = $selectedTag ? (int)$selectedTag['id'] : null;
+
+// Appended to links/forms so the chosen tag survives navigation.
+$tagQuery = $tagId !== null ? '&tag=' . $tagId : '';
+
+$deck = FlashcardProgress::getDeckForUser($userId, $deckFilter, $tagId);
 $isShuffled = FlashcardProgress::isDeckShuffledForUser($userId);
 
-// Only the full deck keeps a persistent resume point; the short filtered
-// passes always start at the top.
-$persistPosition = ($deckFilter === FlashcardProgress::DECK_ALL);
+// Only the full, untagged deck keeps a persistent resume point; the shorter
+// filtered passes always start at the top.
+$persistPosition = ($deckFilter === FlashcardProgress::DECK_ALL && $tagId === null);
 $startAt = $persistPosition ? min(FlashcardProgress::deckPositionForUser($userId), count($deck)) : 0;
 
 $deckJson = array_map(fn($row) => [
@@ -44,19 +57,36 @@ header_html('Flashcards');
 <div class="review-toolbar">
   <nav class="deck-tabs" aria-label="Deck">
     <?php foreach ($deckLabels as $key => $label): ?>
-      <a href="/review/?deck=<?=h($key)?>" class="deck-tab<?= $deckFilter === $key ? ' active' : '' ?>"><?=h($label)?></a>
+      <a href="/review/?deck=<?=h($key)?><?=h($tagQuery)?>" class="deck-tab<?= $deckFilter === $key ? ' active' : '' ?>"><?=h($label)?></a>
     <?php endforeach; ?>
   </nav>
+  <?php if (!empty($allTags)): ?>
+    <form method="get" action="/review/" class="deck-picker">
+      <input type="hidden" name="deck" value="<?=h($deckFilter)?>">
+      <label class="small">Deck
+        <select name="tag" onchange="this.form.submit()">
+          <option value="">All decks</option>
+          <?php foreach ($allTags as $tag): ?>
+            <option value="<?= (int)$tag['id'] ?>" <?= $tagId === (int)$tag['id'] ? 'selected' : '' ?>>
+              <?=h($tag['name'])?> (<?= (int)$tag['word_count'] ?>)
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+    </form>
+  <?php endif; ?>
   <?php if ($deckFilter === FlashcardProgress::DECK_ALL): ?>
     <div class="deck-order">
       <span class="small"><?= $isShuffled ? 'Shuffled' : 'In order' ?></span>
       <form method="post" action="/review/shuffle_eval.php">
         <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+        <input type="hidden" name="tag" value="<?= $tagId !== null ? $tagId : '' ?>">
         <button type="submit" class="button small">&#128256; Shuffle</button>
       </form>
       <?php if ($isShuffled): ?>
         <form method="post" action="/review/order_eval.php">
           <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+          <input type="hidden" name="tag" value="<?= $tagId !== null ? $tagId : '' ?>">
           <button type="submit" class="button small">Original order</button>
         </form>
       <?php endif; ?>
@@ -67,13 +97,22 @@ header_html('Flashcards');
 <?php if (empty($deck)): ?>
   <div class="card empty-deck">
     <?php if ($deckFilter === FlashcardProgress::DECK_FLAGGED): ?>
-      <h2>No flagged words</h2>
+      <h2>No flagged words<?= $selectedTag ? ' in ' . h($selectedTag['name']) : '' ?></h2>
       <p>Tap the flag on any card to collect words here for a focused pass.</p>
-      <a class="button primary" href="/review/">Back to all words</a>
+      <a class="button primary" href="/review/?deck=all<?=h($tagQuery)?>">Back to all words</a>
     <?php elseif ($deckFilter === FlashcardProgress::DECK_NEEDS_REVIEW): ?>
-      <h2>No misses &#127881;</h2>
+      <h2>No misses<?= $selectedTag ? ' in ' . h($selectedTag['name']) : '' ?> &#127881;</h2>
       <p>Nothing is marked "Need More Review" right now. Keep it up!</p>
-      <a class="button primary" href="/review/">Back to all words</a>
+      <a class="button primary" href="/review/?deck=all<?=h($tagQuery)?>">Back to all words</a>
+    <?php elseif ($selectedTag): ?>
+      <h2>Nothing in "<?=h($selectedTag['name'])?>" yet</h2>
+      <p>No words carry this tag so far.</p>
+      <div class="actions" style="justify-content:center;">
+        <a class="button primary" href="/review/">All decks</a>
+        <?php if (!empty($me['is_admin'])): ?>
+          <a class="button" href="/admin/import/upload.php?flow=words">Import Words</a>
+        <?php endif; ?>
+      </div>
     <?php else: ?>
       <h2>The deck is empty</h2>
       <?php if (!empty($me['is_admin'])): ?>
@@ -134,17 +173,19 @@ header_html('Flashcards');
       <?php if ($deckFilter === FlashcardProgress::DECK_ALL): ?>
         <form method="post" action="/review/shuffle_eval.php">
           <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+          <input type="hidden" name="tag" value="<?= $tagId !== null ? $tagId : '' ?>">
           <button type="submit" class="button primary">&#128256; Shuffle &amp; go again</button>
         </form>
         <form method="post" action="/review/order_eval.php">
           <input type="hidden" name="csrf" value="<?=h(csrf_token())?>">
+          <input type="hidden" name="tag" value="<?= $tagId !== null ? $tagId : '' ?>">
           <button type="submit" class="button">Start over in order</button>
         </form>
-        <a class="button" href="/review/?deck=needs_review">Review misses</a>
-        <a class="button" href="/review/?deck=flagged">Review flagged</a>
+        <a class="button" href="/review/?deck=needs_review<?=h($tagQuery)?>">Review misses</a>
+        <a class="button" href="/review/?deck=flagged<?=h($tagQuery)?>">Review flagged</a>
       <?php else: ?>
-        <a class="button primary" href="/review/?deck=<?=h($deckFilter)?>">Go again</a>
-        <a class="button" href="/review/">Back to all words</a>
+        <a class="button primary" href="/review/?deck=<?=h($deckFilter)?><?=h($tagQuery)?>">Go again</a>
+        <a class="button" href="/review/?deck=all<?=h($tagQuery)?>">Back to all words</a>
       <?php endif; ?>
     </div>
   </div>

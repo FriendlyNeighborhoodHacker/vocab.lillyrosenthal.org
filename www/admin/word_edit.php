@@ -24,6 +24,7 @@ $form = [];
 foreach (['word', 'definition', 'sentences', 'synonyms', 'sort_order'] as $field) {
     $form[$field] = $_GET[$field] ?? ($word[$field] ?? '');
 }
+$form['tags'] = $_GET['tags'] ?? implode(', ', WordManagement::tagNamesForWord($wordId));
 
 header_html('Edit ' . $word['word']);
 ?>
@@ -51,6 +52,10 @@ header_html('Edit ' . $word['word']);
     </label>
     <label>Synonyms
       <input type="text" name="synonyms" value="<?=h($form['synonyms'])?>" placeholder="e.g. reduce, diminish (optional)">
+    </label>
+    <label>Tags
+      <input type="text" name="tags" value="<?=h($form['tags'])?>" placeholder='deck name(s), e.g. "White and Blue; Green" (optional)'>
+      <small class="small">Separate multiple decks with ; or , — new tags are created automatically. Clearing this removes the word from every deck.</small>
     </label>
     <label>Order
       <input type="number" name="sort_order" value="<?=h((string)$form['sort_order'])?>" required>

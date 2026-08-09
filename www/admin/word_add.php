@@ -8,7 +8,7 @@ $err = $_GET['err'] ?? null;
 
 // For repopulating form after errors - get from URL parameters
 $form = [];
-foreach (['word', 'definition', 'sentences', 'synonyms'] as $field) {
+foreach (['word', 'definition', 'sentences', 'synonyms', 'tags'] as $field) {
     if (isset($_GET[$field])) {
         $form[$field] = $_GET[$field];
     }
@@ -36,6 +36,10 @@ header_html('Add Word');
     </label>
     <label>Synonyms
       <input type="text" name="synonyms" value="<?=h($form['synonyms'] ?? '')?>" placeholder="e.g. reduce, diminish (optional)">
+    </label>
+    <label>Tags
+      <input type="text" name="tags" value="<?=h($form['tags'] ?? '')?>" placeholder='deck name(s), e.g. "White and Blue; Green" (optional)'>
+      <small class="small">Separate multiple decks with ; or , — new tags are created automatically.</small>
     </label>
 
     <p class="small">The word is added to the end of the deck order.</p>

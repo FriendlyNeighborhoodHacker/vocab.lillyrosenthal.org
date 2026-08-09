@@ -47,10 +47,11 @@ class FlashcardProgress {
      * without any backfill.
      *
      * $deckFilter: 'all', 'flagged' (user's flagged words), or 'needs_review'
-     * (words whose latest mark was Need More Review).
+     * (words whose latest mark was Need More Review). $tagId additionally
+     * limits the deck to words carrying that global tag (e.g. the "Green" deck).
      * Returns rows of [id, word, definition, sentences, synonyms, is_flagged, last_mark].
      */
-    public static function getDeckForUser(int $userId, string $deckFilter = self::DECK_ALL): array {
+    public static function getDeckForUser(int $userId, string $deckFilter = self::DECK_ALL, ?int $tagId = null): array {
         if (!in_array($deckFilter, [self::DECK_ALL, self::DECK_FLAGGED, self::DECK_NEEDS_REVIEW], true)) {
             throw new InvalidArgumentException('Unknown deck filter: ' . $deckFilter);
         }
@@ -62,6 +63,10 @@ class FlashcardProgress {
                        s.last_mark
                 FROM words w
                 LEFT JOIN user_word_state s ON s.word_id = w.id AND s.user_id = :user_id';
+
+        if ($tagId !== null) {
+            $sql .= ' INNER JOIN word_tags wt ON wt.word_id = w.id AND wt.tag_id = :tag_id';
+        }
 
         if ($deckFilter === self::DECK_FLAGGED) {
             $sql .= ' WHERE s.is_flagged = 1';
@@ -77,6 +82,9 @@ class FlashcardProgress {
 
         $st = self::pdo()->prepare($sql);
         $st->bindValue(':user_id', $userId, PDO::PARAM_INT);
+        if ($tagId !== null) {
+            $st->bindValue(':tag_id', $tagId, PDO::PARAM_INT);
+        }
         if ($seed !== null) {
             $st->bindValue(':seed', $seed, PDO::PARAM_INT);
         }

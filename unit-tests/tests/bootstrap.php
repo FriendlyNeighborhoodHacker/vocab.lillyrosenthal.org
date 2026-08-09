@@ -44,7 +44,7 @@ function test_reset_all(): void {
     $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
     foreach ([
         'activity_log', 'emails_sent',
-        'word_review_events', 'user_word_state', 'words',
+        'word_review_events', 'user_word_state', 'word_tags', 'tags', 'words',
         'users',
     ] as $table) {
         $pdo->exec('TRUNCATE TABLE ' . $table);

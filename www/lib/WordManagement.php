@@ -124,9 +124,105 @@ class WordManagement {
         return $row ?: null;
     }
 
-    public static function listWordsInGlobalOrder(): array {
-        $st = self::pdo()->query('SELECT * FROM words ORDER BY sort_order, id');
+    // Word rows with a "tags" column ("Green, White and Blue"); optionally
+    // limited to one tag (deck).
+    public static function listWordsInGlobalOrder(?int $tagId = null): array {
+        $sql = 'SELECT w.*,
+                       (SELECT GROUP_CONCAT(t.name ORDER BY t.name SEPARATOR \', \')
+                        FROM word_tags wt JOIN tags t ON t.id = wt.tag_id
+                        WHERE wt.word_id = w.id) AS tags
+                FROM words w';
+        $params = [];
+        if ($tagId !== null) {
+            $sql .= ' INNER JOIN word_tags wtf ON wtf.word_id = w.id AND wtf.tag_id = ?';
+            $params[] = $tagId;
+        }
+        $sql .= ' ORDER BY w.sort_order, w.id';
+        $st = self::pdo()->prepare($sql);
+        $st->execute($params);
         return $st->fetchAll();
+    }
+
+    // ===== Tags (decks) =====
+
+    // "White and Blue; Green" or "Green, Red" -> ['White and Blue', 'Green'].
+    // Splits on commas/semicolons, trims, drops blanks, dedupes case-insensitively.
+    public static function parseTagList(string $tags): array {
+        $names = [];
+        foreach (preg_split('/[;,]/', $tags) ?: [] as $name) {
+            $name = trim($name);
+            if ($name === '') continue;
+            $key = mb_strtolower($name);
+            if (!isset($names[$key])) {
+                $names[$key] = $name;
+            }
+        }
+        return array_values($names);
+    }
+
+    // All tags with how many words carry each, alphabetical.
+    public static function listAllTags(): array {
+        $st = self::pdo()->query(
+            'SELECT t.id, t.name, COUNT(wt.id) AS word_count
+             FROM tags t LEFT JOIN word_tags wt ON wt.tag_id = t.id
+             GROUP BY t.id, t.name
+             ORDER BY t.name'
+        );
+        return $st->fetchAll();
+    }
+
+    public static function findTagById(int $tagId): ?array {
+        $st = self::pdo()->prepare('SELECT * FROM tags WHERE id = ? LIMIT 1');
+        $st->execute([$tagId]);
+        $row = $st->fetch();
+        return $row ?: null;
+    }
+
+    // A word's tag names, alphabetical.
+    public static function tagNamesForWord(int $wordId): array {
+        $st = self::pdo()->prepare(
+            'SELECT t.name FROM word_tags wt JOIN tags t ON t.id = wt.tag_id
+             WHERE wt.word_id = ? ORDER BY t.name'
+        );
+        $st->execute([$wordId]);
+        return array_map(fn($row) => (string)$row['name'], $st->fetchAll());
+    }
+
+    // Replace a word's tags with exactly $tagNames, creating missing tags.
+    // Logs the change; use syncWordTagLinks() from flows that log in aggregate.
+    public static function setWordTags(UserContext $ctx, int $wordId, array $tagNames): void {
+        self::assertAdmin($ctx);
+        self::syncWordTagLinks($wordId, $tagNames);
+        ActivityLog::log($ctx, 'word.tags_set', ['word_id' => $wordId, 'tags' => array_values($tagNames)]);
+    }
+
+    // The unlogged sync underneath setWordTags(); the CSV import calls this
+    // per row inside its transaction and logs one aggregate entry instead.
+    public static function syncWordTagLinks(int $wordId, array $tagNames): void {
+        $pdo = self::pdo();
+        $pdo->prepare('DELETE FROM word_tags WHERE word_id = ?')->execute([$wordId]);
+        foreach ($tagNames as $name) {
+            $name = trim((string)$name);
+            if ($name === '') continue;
+            $tagId = self::findOrCreateTagIdByName($name);
+            $pdo->prepare('INSERT IGNORE INTO word_tags (word_id, tag_id) VALUES (?,?)')
+                ->execute([$wordId, $tagId]);
+        }
+    }
+
+    // Tag names match case-insensitively (utf8mb4 CI collation on tags.name).
+    private static function findOrCreateTagIdByName(string $name): int {
+        if (mb_strlen($name) > 100) {
+            throw new InvalidArgumentException('Tag names must be 100 characters or fewer.');
+        }
+        $st = self::pdo()->prepare('SELECT id FROM tags WHERE name = ? LIMIT 1');
+        $st->execute([$name]);
+        $id = $st->fetchColumn();
+        if ($id) return (int)$id;
+
+        $st = self::pdo()->prepare('INSERT INTO tags (name) VALUES (?)');
+        $st->execute([$name]);
+        return (int)self::pdo()->lastInsertId();
     }
 
     public static function countWords(): int {

@@ -133,6 +133,64 @@ final class WordManagementTest extends TestCase
         $this->assertSame($id, (int)$found['id']);
     }
 
+    // --- Tags (decks) ---
+
+    public function testParseTagList(): void
+    {
+        $this->assertSame(['White and Blue', 'Green'], WordManagement::parseTagList('White and Blue; Green'));
+        $this->assertSame(['Green', 'Red'], WordManagement::parseTagList(' Green , Red '));
+        $this->assertSame(['Green'], WordManagement::parseTagList('Green, GREEN')); // case-insensitive dedupe
+        $this->assertSame([], WordManagement::parseTagList('  ; , '));
+    }
+
+    public function testSetWordTagsCreatesAndReplaces(): void
+    {
+        $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen');
+
+        WordManagement::setWordTags($this->adminCtx, $id, ['White and Blue', 'Green']);
+        $this->assertSame(['Green', 'White and Blue'], WordManagement::tagNamesForWord($id));
+
+        // Replacing keeps the shared tag row and drops the removed link
+        WordManagement::setWordTags($this->adminCtx, $id, ['Green']);
+        $this->assertSame(['Green'], WordManagement::tagNamesForWord($id));
+
+        // Clearing removes the word from every deck
+        WordManagement::setWordTags($this->adminCtx, $id, []);
+        $this->assertSame([], WordManagement::tagNamesForWord($id));
+    }
+
+    public function testTagNamesMatchCaseInsensitively(): void
+    {
+        $id1 = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen');
+        $id2 = WordManagement::addWord($this->adminCtx, 'candor', 'honesty');
+
+        WordManagement::setWordTags($this->adminCtx, $id1, ['Green']);
+        WordManagement::setWordTags($this->adminCtx, $id2, ['green']);
+
+        // One shared tag row, both words attached
+        $tags = WordManagement::listAllTags();
+        $this->assertCount(1, $tags);
+        $this->assertSame(2, (int)$tags[0]['word_count']);
+    }
+
+    public function testListWordsFilteredByTag(): void
+    {
+        $id1 = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen');
+        $id2 = WordManagement::addWord($this->adminCtx, 'verdant', 'green with vegetation');
+        WordManagement::setWordTags($this->adminCtx, $id1, ['White and Blue']);
+        WordManagement::setWordTags($this->adminCtx, $id2, ['Green']);
+
+        $tags = WordManagement::listAllTags();
+        $byName = array_column($tags, null, 'name');
+
+        $greenWords = WordManagement::listWordsInGlobalOrder((int)$byName['Green']['id']);
+        $this->assertSame(['verdant'], array_column($greenWords, 'word'));
+
+        $all = WordManagement::listWordsInGlobalOrder();
+        $this->assertCount(2, $all);
+        $this->assertSame('White and Blue', $all[0]['tags']);
+    }
+
     public function testListAndCount(): void
     {
         WordManagement::addWord($this->adminCtx, 'beta', 'second', null, null, 2);
