@@ -93,34 +93,39 @@ header_html('Flashcards');
   </div>
 
   <div class="flashcard-stage" id="flashcard-stage">
-    <div class="flashcard" id="flashcard" tabindex="0" role="button" aria-label="Flip card">
-      <button type="button" class="flag-btn" id="flag-btn" aria-pressed="false" title="Flag this word (f)">
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-          <path class="flag-outline" d="M5 3v18M5 4h11l-2.5 4L16 12H5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path class="flag-fill" d="M5 4h11l-2.5 4L16 12H5z" fill="currentColor"/>
-        </svg>
-      </button>
-      <div class="flashcard-face flashcard-front">
-        <div class="flashcard-word" id="card-word"></div>
-        <div class="flashcard-hint small">tap to see the definition</div>
+    <div class="flashcard-row">
+      <button type="button" class="nav-btn" id="btn-prev" aria-label="Previous card" title="Previous card (&#8592;)">&lt;</button>
+      <div class="flashcard" id="flashcard" tabindex="0" role="button" aria-label="Flip card">
+        <button type="button" class="flag-btn" id="flag-btn" aria-pressed="false" title="Flag this word (f)">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path class="flag-outline" d="M5 3v18M5 4h11l-2.5 4L16 12H5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path class="flag-fill" d="M5 4h11l-2.5 4L16 12H5z" fill="currentColor"/>
+          </svg>
+        </button>
+        <div class="flashcard-face flashcard-front">
+          <div class="flashcard-word" id="card-word"></div>
+          <div class="flashcard-hint small">tap to see the definition</div>
+        </div>
+        <div class="flashcard-face flashcard-back">
+          <div class="flashcard-definition" id="card-definition"></div>
+          <div class="flashcard-hint small">tap to see the word</div>
+        </div>
       </div>
-      <div class="flashcard-face flashcard-back">
-        <div class="flashcard-definition" id="card-definition"></div>
-        <div class="flashcard-hint small">tap to see the word</div>
-      </div>
+      <button type="button" class="nav-btn" id="btn-next" aria-label="Next card" title="Next card (&#8594;)">&gt;</button>
     </div>
 
     <div class="mark-buttons">
       <button type="button" class="button mark-btn mark-miss" id="btn-miss" title="Press 2">Need More Review</button>
       <button type="button" class="button mark-btn mark-got" id="btn-got" title="Press 1">Got it! &#10024;</button>
     </div>
-    <p class="keyboard-hint small">space = flip &nbsp;·&nbsp; 1 = got it &nbsp;·&nbsp; 2 = need more review &nbsp;·&nbsp; f = flag</p>
+    <p class="keyboard-hint small">space = flip &nbsp;·&nbsp; &#8592; &#8594; = back / forward &nbsp;·&nbsp; 1 = got it &nbsp;·&nbsp; 2 = need more review &nbsp;·&nbsp; f = flag</p>
   </div>
 
   <div class="card deck-done hidden" id="deck-done">
     <div class="deck-done-burst" aria-hidden="true">&#127881;</div>
     <h2>Deck complete!</h2>
     <p id="deck-done-tally" class="deck-done-tally"></p>
+    <p><button type="button" class="button small" id="btn-done-back">&lt; Back to the last card</button></p>
     <div class="actions" style="justify-content:center;flex-wrap:wrap;">
       <?php if ($deckFilter === FlashcardProgress::DECK_ALL): ?>
         <form method="post" action="/review/shuffle_eval.php">

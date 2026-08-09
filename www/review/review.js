@@ -1,7 +1,7 @@
 // Flashcard deck engine. The page embeds DECK (the user's full ordered deck),
 // START_AT (resume index), PERSIST_POSITION, and CSRF. Reads never hit the
-// server; marks and flag toggles POST to the dedicated eval endpoints and the
-// UI advances optimistically.
+// server; marks, flag toggles, and position saves POST to the dedicated eval
+// endpoints and the UI advances optimistically.
 (function () {
   'use strict';
 
@@ -18,12 +18,16 @@
   var flagBtn = document.getElementById('flag-btn');
   var btnGot = document.getElementById('btn-got');
   var btnMiss = document.getElementById('btn-miss');
+  var btnPrev = document.getElementById('btn-prev');
+  var btnNext = document.getElementById('btn-next');
+  var btnDoneBack = document.getElementById('btn-done-back');
   var progressFill = document.getElementById('progress-fill');
   var progressText = document.getElementById('progress-text');
   var donePanel = document.getElementById('deck-done');
   var doneTally = document.getElementById('deck-done-tally');
   var toast = document.getElementById('toast');
   var toastTimer;
+  var savePositionTimer;
 
   function showToast(message) {
     toast.textContent = message;
@@ -38,6 +42,20 @@
     Object.keys(fields).forEach(function (k) { body.append(k, fields[k]); });
     return fetch(url, { method: 'POST', body: body, credentials: 'same-origin' })
       .then(function (r) { return r.json(); });
+  }
+
+  // Marks piggyback their own position save; browsing with the arrows saves
+  // it separately (debounced so rapid flipping produces one write).
+  function schedulePositionSave() {
+    if (!PERSIST_POSITION) return;
+    clearTimeout(savePositionTimer);
+    savePositionTimer = setTimeout(function () {
+      postForm('/review/save_position_eval.php', { position: idx })
+        .then(function (res) {
+          if (!res.ok) showToast('Could not save your place: ' + (res.error || 'unknown error'));
+        })
+        .catch(function () { showToast('Could not save your place — check your connection.'); });
+    }, 500);
   }
 
   function updateScoreChip(score) {
@@ -70,18 +88,34 @@
       return;
     }
 
+    stage.classList.remove('hidden');
+    donePanel.classList.add('hidden');
+
     var entry = DECK[idx];
     card.classList.remove('flipped');
     wordEl.textContent = entry.word;
     definitionEl.textContent = entry.definition;
     flagBtn.classList.toggle('flagged', entry.flagged);
     flagBtn.setAttribute('aria-pressed', entry.flagged ? 'true' : 'false');
+    btnPrev.disabled = idx === 0;
   }
 
   function flipCard() {
     if (idx >= DECK.length) return;
     card.classList.toggle('flipped');
   }
+
+  // Browse to another card without marking (the < and > buttons / arrow keys).
+  function goTo(newIdx) {
+    newIdx = Math.max(0, Math.min(newIdx, DECK.length));
+    if (newIdx === idx) return;
+    idx = newIdx;
+    renderCard();
+    schedulePositionSave();
+  }
+
+  function goBack() { goTo(idx - 1); }
+  function goForward() { goTo(idx + 1); }
 
   function markCurrent(mark) {
     if (idx >= DECK.length) return;
@@ -142,10 +176,15 @@
   });
   btnGot.addEventListener('click', function () { markCurrent('got_it'); });
   btnMiss.addEventListener('click', function () { markCurrent('needs_review'); });
+  btnPrev.addEventListener('click', goBack);
+  btnNext.addEventListener('click', goForward);
+  if (btnDoneBack) btnDoneBack.addEventListener('click', goBack);
 
   document.addEventListener('keydown', function (e) {
     if (e.target.matches('input, textarea, select')) return;
     if (e.key === ' ') { e.preventDefault(); flipCard(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); goBack(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); goForward(); }
     else if (e.key === '1') { markCurrent('got_it'); }
     else if (e.key === '2') { markCurrent('needs_review'); }
     else if (e.key === 'f' || e.key === 'F') { toggleFlag(); }
