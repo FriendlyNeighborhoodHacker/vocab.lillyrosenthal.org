@@ -274,13 +274,33 @@ class QuizManagement {
         return self::RESULT_INCORRECT;
     }
 
-    // One typo (insert / delete / swap a letter) in a word long enough for the
-    // slip to be obviously a slip. Short words must be exact.
+    // One typo — a letter added, dropped, mistyped, or two letters swapped — in a
+    // word long enough for the slip to be obviously a slip. Short words must be
+    // exact, since at three letters a "typo" is usually a different word.
     private static function isCloseSpelling(string $typed, string $target): bool {
         if ($target === '' || mb_strlen($target) < 5) return false;
         // levenshtein() counts bytes; on accented input only exact matches count.
         if (strlen($typed) !== mb_strlen($typed) || strlen($target) !== mb_strlen($target)) return false;
-        return levenshtein($typed, $target) <= 1;
+        return levenshtein($typed, $target) <= 1 || self::isAdjacentSwap($typed, $target);
+    }
+
+    // "diegn" for "deign": two neighbouring letters typed the wrong way round.
+    // Levenshtein scores that as two edits, but it's one slip of the fingers.
+    private static function isAdjacentSwap(string $typed, string $target): bool {
+        if (strlen($typed) !== strlen($target)) return false;
+
+        $differing = [];
+        for ($i = 0, $len = strlen($typed); $i < $len; $i++) {
+            if ($typed[$i] !== $target[$i]) {
+                $differing[] = $i;
+                if (count($differing) > 2) return false;
+            }
+        }
+
+        return count($differing) === 2
+            && $differing[1] === $differing[0] + 1
+            && $typed[$differing[0]] === $target[$differing[1]]
+            && $typed[$differing[1]] === $target[$differing[0]];
     }
 
     // "reduce, diminish; lessen" -> ['reduce', 'diminish', 'lessen'].

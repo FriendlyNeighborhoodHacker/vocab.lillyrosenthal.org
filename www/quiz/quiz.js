@@ -252,7 +252,10 @@
       fbYours.classList.remove('hidden');
     }
 
+    // In Guess the Word the definition is the prompt sitting right above, so
+    // repeating it here would just pad the panel.
     fbDefinition.textContent = res.definition;
+    fbDefinition.classList.toggle('hidden', QUIZ_MODE === 'guess_word');
     fbSentence.textContent = res.sentences || '';
     fbSentence.classList.toggle('hidden', !res.sentences);
     fbSynonyms.textContent = res.synonyms ? 'Similar: ' + res.synonyms : '';
@@ -265,9 +268,14 @@
     claimBtn.disabled = false;
 
     form.classList.add('hidden');
+    hintBtn.classList.add('hidden');
     feedback.classList.remove('hidden');
     renderStreak();
-    nextBtn.focus();
+
+    // Show the verdict from the top — focusing the button alone would scroll a
+    // phone straight past the word we just revealed.
+    feedback.scrollIntoView({ block: 'nearest' });
+    nextBtn.focus({ preventScroll: true });
   }
 
   function claimCorrect() {

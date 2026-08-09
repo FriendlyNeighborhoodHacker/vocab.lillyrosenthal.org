@@ -124,6 +124,16 @@ final class QuizManagementTest extends TestCase
         );
     }
 
+    public function testSwappedLettersCountAsClose(): void
+    {
+        // The classic finger slip: "brusuqe" for "brusque". Levenshtein calls a
+        // transposition two edits, so this only passes with the swap check.
+        $this->assertSame(
+            QuizManagement::RESULT_CLOSE,
+            QuizManagement::judgeAnswer('brusuqe', $this->wordRow('brusque'), QuizManagement::MODE_GUESS_WORD)
+        );
+    }
+
     public function testShortWordsMustBeSpelledExactly(): void
     {
         $shortId = WordManagement::addWord($this->adminCtx, 'wan', 'pale and weak');
