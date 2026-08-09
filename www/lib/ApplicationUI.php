@@ -42,7 +42,7 @@ class ApplicationUI {
      */
     public static function scoreChipHtml(int $userId): string {
         $score = FlashcardProgress::getScoreSummary($userId);
-        return '<a class="score-chip" id="score-chip" href="/stats/" title="Words you\'ve got — tap for stats">'
+        return '<a class="score-chip" id="score-chip" href="/progress/" title="Words you\'ve got — tap for stats">'
              . '<span class="score-star" aria-hidden="true">&#11088;</span>'
              . '<span class="score-numbers"><span id="score-mastered">' . number_format($score['mastered']) . '</span>'
              . ' / <span id="score-total">' . number_format($score['total_words']) . '</span></span>'
@@ -67,7 +67,7 @@ class ApplicationUI {
         if ($u) {
             $navItems = [
                 ['path' => '/review/', 'label' => 'Flashcards', 'prefixes' => ['/review/', '/index.php']],
-                ['path' => '/stats/', 'label' => 'My Stats', 'prefixes' => ['/stats/']],
+                ['path' => '/progress/', 'label' => 'My Stats', 'prefixes' => ['/progress/']],
             ];
 
             echo '<header class="topbar">';

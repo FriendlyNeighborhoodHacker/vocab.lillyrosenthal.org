@@ -24,6 +24,26 @@ final class WordManagementTest extends TestCase
         $this->assertSame(2, (int)$w2['sort_order']);
         $this->assertSame('abate', $w1['word']);
         $this->assertSame('to lessen', $w1['definition']);
+        $this->assertNull($w1['sentences']);
+        $this->assertNull($w1['synonyms']);
+    }
+
+    public function testAddWordStoresSentencesAndSynonyms(): void
+    {
+        $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen', 'The storm abated.', 'subside, diminish');
+
+        $word = WordManagement::findById($id);
+        $this->assertSame('The storm abated.', $word['sentences']);
+        $this->assertSame('subside, diminish', $word['synonyms']);
+    }
+
+    public function testAddWordStoresBlankOptionalFieldsAsNull(): void
+    {
+        $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen', '   ', '');
+
+        $word = WordManagement::findById($id);
+        $this->assertNull($word['sentences']);
+        $this->assertNull($word['synonyms']);
     }
 
     public function testAddWordRejectsDuplicateCaseInsensitively(): void
@@ -63,12 +83,25 @@ final class WordManagementTest extends TestCase
     {
         $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen');
 
-        $ok = WordManagement::updateWord($this->adminCtx, $id, 'abate', 'to become less intense', 5);
+        $ok = WordManagement::updateWord($this->adminCtx, $id, 'abate', 'to become less intense', 'The storm abated.', 'subside', 5);
         $this->assertTrue($ok);
 
         $word = WordManagement::findById($id);
         $this->assertSame('to become less intense', $word['definition']);
+        $this->assertSame('The storm abated.', $word['sentences']);
+        $this->assertSame('subside', $word['synonyms']);
         $this->assertSame(5, (int)$word['sort_order']);
+    }
+
+    public function testUpdateWordClearsOptionalFieldsWhenBlank(): void
+    {
+        $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen', 'The storm abated.', 'subside');
+
+        WordManagement::updateWord($this->adminCtx, $id, 'abate', 'to lessen', '', '', 1);
+
+        $word = WordManagement::findById($id);
+        $this->assertNull($word['sentences']);
+        $this->assertNull($word['synonyms']);
     }
 
     public function testUpdateWordRejectsCollidingRename(): void
@@ -77,7 +110,7 @@ final class WordManagementTest extends TestCase
         $id2 = WordManagement::addWord($this->adminCtx, 'ephemeral', 'short-lived');
 
         $this->expectException(InvalidArgumentException::class);
-        WordManagement::updateWord($this->adminCtx, $id2, 'ABATE', 'colliding', 2);
+        WordManagement::updateWord($this->adminCtx, $id2, 'ABATE', 'colliding', null, null, 2);
     }
 
     public function testDeleteWordCascadesUserState(): void
@@ -102,8 +135,8 @@ final class WordManagementTest extends TestCase
 
     public function testListAndCount(): void
     {
-        WordManagement::addWord($this->adminCtx, 'beta', 'second', 2);
-        WordManagement::addWord($this->adminCtx, 'alpha', 'first', 1);
+        WordManagement::addWord($this->adminCtx, 'beta', 'second', null, null, 2);
+        WordManagement::addWord($this->adminCtx, 'alpha', 'first', null, null, 1);
 
         $words = WordManagement::listWordsInGlobalOrder();
         $this->assertSame(['alpha', 'beta'], array_column($words, 'word'));
