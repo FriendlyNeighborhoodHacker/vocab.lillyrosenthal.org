@@ -171,6 +171,30 @@ CREATE TABLE word_review_events (
 
 CREATE INDEX idx_wre_user_created ON word_review_events(user_id, created_at);
 
+-- ===== Quiz attempts =====
+-- Append-only: one row per answer typed in the "Guess the Word" / "Fill in the
+-- Blank" quizzes, with the points it earned (10 spelled right, 8 one typo off,
+-- 5 claimed). result records how the server judged it; was_overridden records
+-- the user afterwards claiming a scoreless answer as right anyway — the case a
+-- definition legitimately fits more than one word — so the honest record of
+-- what was typed survives alongside the credit given.
+CREATE TABLE quiz_attempts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  word_id INT NOT NULL,
+  quiz_mode ENUM('guess_word','fill_blank') NOT NULL,
+  answer_text VARCHAR(255) NOT NULL DEFAULT '',
+  result ENUM('correct','close','synonym','incorrect') NOT NULL,
+  was_overridden TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'User claimed this answer was right anyway',
+  points_awarded INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_qa_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_qa_word FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_qa_user_created ON quiz_attempts(user_id, created_at);
+CREATE INDEX idx_qa_user_word ON quiz_attempts(user_id, word_id);
+
 -- Seed admin so a fresh install can be signed into immediately: email "lilly",
 -- password "lilly". Change the password after first login. Regenerate the hash
 -- with: php -r "echo password_hash('lilly', PASSWORD_DEFAULT);"

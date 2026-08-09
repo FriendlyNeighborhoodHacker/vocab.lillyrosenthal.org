@@ -183,6 +183,7 @@ header_html('Flashcards');
         </form>
         <a class="button" href="/review/?deck=needs_review<?=h($tagQuery)?>">Review misses</a>
         <a class="button" href="/review/?deck=flagged<?=h($tagQuery)?>">Review flagged</a>
+        <a class="button" href="/quiz/<?= $tagId !== null ? '?tags%5B%5D=' . (int)$tagId : '' ?>">&#9997;&#65039; Take a quiz</a>
       <?php else: ?>
         <a class="button primary" href="/review/?deck=<?=h($deckFilter)?><?=h($tagQuery)?>">Go again</a>
         <a class="button" href="/review/?deck=all<?=h($tagQuery)?>">Back to all words</a>

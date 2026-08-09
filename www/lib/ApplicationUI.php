@@ -67,6 +67,7 @@ class ApplicationUI {
         if ($u) {
             $navItems = [
                 ['path' => '/review/', 'label' => 'Flashcards', 'prefixes' => ['/review/', '/index.php']],
+                ['path' => '/quiz/', 'label' => 'Quiz', 'prefixes' => ['/quiz/']],
                 ['path' => '/progress/', 'label' => 'My Stats', 'prefixes' => ['/progress/']],
             ];
 

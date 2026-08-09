@@ -2,11 +2,13 @@
 // Personal progress page: big-number tiles plus a 14-day activity chart.
 require_once __DIR__ . '/../partials.php';
 require_once __DIR__ . '/../lib/FlashcardProgress.php';
+require_once __DIR__ . '/../lib/QuizManagement.php';
 Application::init();
 require_login();
 
 $me = current_user();
 $stats = FlashcardProgress::getStatsForUser((int)$me['id']);
+$quiz = QuizManagement::getQuizStatsForUser((int)$me['id']);
 
 $maxDaily = 0;
 foreach ($stats['daily_reviews'] as $day) {
@@ -59,8 +61,34 @@ header_html('My Stats');
   <?php endif; ?>
 </div>
 
+<h3 class="progress-section-head">Quiz &#9997;&#65039;</h3>
+<?php if ($quiz['answered'] === 0): ?>
+  <div class="card">
+    <p class="small">No quiz answers yet — <a href="/quiz/">type your first word</a> and your points start stacking up.</p>
+  </div>
+<?php else: ?>
+  <div class="stat-tiles">
+    <div class="stat-tile stat-points">
+      <div class="stat-number"><?= number_format($quiz['points']) ?></div>
+      <div class="stat-label">Quiz points</div>
+      <div class="stat-sub small"><?= number_format($quiz['points_today']) ?> today</div>
+    </div>
+    <div class="stat-tile stat-accuracy">
+      <div class="stat-number"><?= (int)$quiz['accuracy'] ?>%</div>
+      <div class="stat-label">Answered right</div>
+      <div class="stat-sub small"><?= number_format($quiz['correct']) ?> of <?= number_format($quiz['answered']) ?></div>
+    </div>
+    <div class="stat-tile stat-today">
+      <div class="stat-number"><?= number_format($quiz['answered_today']) ?></div>
+      <div class="stat-label">Quizzed today</div>
+      <div class="stat-sub small"><a href="/quiz/">play a round</a></div>
+    </div>
+  </div>
+<?php endif; ?>
+
 <div class="actions">
   <a class="button primary" href="/review/">Keep reviewing &#8594;</a>
+  <a class="button" href="/quiz/">Take a quiz</a>
 </div>
 
 <?php footer_html(); ?>

@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../www/config.php';
 require_once __DIR__ . '/../../www/lib/UserManagement.php';
 require_once __DIR__ . '/../../www/lib/WordManagement.php';
 require_once __DIR__ . '/../../www/lib/FlashcardProgress.php';
+require_once __DIR__ . '/../../www/lib/QuizManagement.php';
 require_once __DIR__ . '/../../www/lib/CsvImport.php';
 require_once __DIR__ . '/../../www/lib/WordCsvImport.php';
 require_once __DIR__ . '/../../www/lib/ActivityLog.php';
@@ -44,7 +45,7 @@ function test_reset_all(): void {
     $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
     foreach ([
         'activity_log', 'emails_sent',
-        'word_review_events', 'user_word_state', 'user_deck_positions', 'word_tags', 'tags', 'words',
+        'word_review_events', 'quiz_attempts', 'user_word_state', 'user_deck_positions', 'word_tags', 'tags', 'words',
         'users',
     ] as $table) {
         $pdo->exec('TRUNCATE TABLE ' . $table);
