@@ -1,0 +1,4 @@
+.DS_Store
+www/config.local.php
+www/logs/*.log
+unit-tests/.phpunit.cache/
