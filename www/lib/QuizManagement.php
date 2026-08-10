@@ -479,9 +479,10 @@ class QuizManagement {
      * every Need More Review click on a flashcard plus every quiz answer that
      * earned nothing (a claimed "right anyway" answer is not a miss). Rows are
      * [id, word, definition, flashcard_misses, quiz_misses, total_misses],
-     * most-missed first; words never missed don't appear.
+     * most-missed first; words never missed don't appear. A null $limit
+     * returns every word ever missed.
      */
-    public static function getMostMissedWordsForUser(int $userId, int $limit = 10): array {
+    public static function getMostMissedWordsForUser(int $userId, ?int $limit = 20): array {
         $sql = 'SELECT w.id, w.word, w.definition,
                        COALESCE(s.needs_review_count, 0) AS flashcard_misses,
                        COALESCE(q.quiz_misses, 0) AS quiz_misses,
@@ -495,13 +496,17 @@ class QuizManagement {
                     GROUP BY word_id
                 ) q ON q.word_id = w.id
                 WHERE COALESCE(s.needs_review_count, 0) + COALESCE(q.quiz_misses, 0) > 0
-                ORDER BY total_misses DESC, w.word ASC
-                LIMIT :lim';
+                ORDER BY total_misses DESC, w.word ASC';
+        if ($limit !== null) {
+            $sql .= ' LIMIT :lim';
+        }
 
         $st = self::pdo()->prepare($sql);
         $st->bindValue(':uid_state', $userId, PDO::PARAM_INT);
         $st->bindValue(':uid_quiz', $userId, PDO::PARAM_INT);
-        $st->bindValue(':lim', max(1, $limit), PDO::PARAM_INT);
+        if ($limit !== null) {
+            $st->bindValue(':lim', max(1, $limit), PDO::PARAM_INT);
+        }
         $st->execute();
 
         return array_map(fn($row) => [

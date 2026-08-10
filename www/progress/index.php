@@ -9,7 +9,17 @@ require_login();
 $me = current_user();
 $stats = FlashcardProgress::getStatsForUser((int)$me['id']);
 $quiz = QuizManagement::getQuizStatsForUser((int)$me['id']);
-$mostMissed = QuizManagement::getMostMissedWordsForUser((int)$me['id']);
+
+// How many most-missed words to show: top 20 (default), top 40, or everything.
+$missedChoices = ['20' => 'Top 20', '40' => 'Top 40', 'all' => 'All time'];
+$missedShown = (string)($_GET['missed'] ?? '20');
+if (!isset($missedChoices[$missedShown])) {
+    $missedShown = '20';
+}
+$mostMissed = QuizManagement::getMostMissedWordsForUser(
+    (int)$me['id'],
+    $missedShown === 'all' ? null : (int)$missedShown
+);
 
 $maxDaily = 0;
 foreach ($stats['daily_reviews'] as $day) {
@@ -92,7 +102,18 @@ header_html('My Stats');
   <?php if (!$mostMissed): ?>
     <p class="small">Nothing missed yet — every flashcard you mark Need More Review and every quiz answer that doesn't land shows up here.</p>
   <?php else: ?>
-    <p class="small">Counting every Need More Review on a flashcard and every quiz answer that didn't earn points.</p>
+    <div class="missed-toolbar">
+      <p class="small">Counting every Need More Review on a flashcard and every quiz answer that didn't earn points.</p>
+      <div class="missed-limit-picks">
+        <?php foreach ($missedChoices as $value => $label): ?>
+          <?php if ($value === $missedShown): ?>
+            <span class="missed-limit-pick active"><?= h($label) ?></span>
+          <?php else: ?>
+            <a class="missed-limit-pick" href="/progress/?missed=<?= h($value) ?>"><?= h($label) ?></a>
+          <?php endif; ?>
+        <?php endforeach; ?>
+      </div>
+    </div>
     <div class="table-scroll">
       <table class="list">
         <thead>

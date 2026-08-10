@@ -624,6 +624,10 @@ final class QuizManagementTest extends TestCase
         $missed = QuizManagement::getMostMissedWordsForUser($this->userCtx->id, 1);
 
         $this->assertSame(['abate'], array_column($missed, 'word'));
+
+        // A null limit returns everything ever missed — still only this user's.
+        $all = QuizManagement::getMostMissedWordsForUser($this->userCtx->id, null);
+        $this->assertSame(['abate', 'brusque'], array_column($all, 'word'));
     }
 
     // --- stats ---

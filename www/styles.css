@@ -577,6 +577,30 @@ pre.import-example {
 
 .progress-section-head { margin: 26px 0 0; }
 
+.missed-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.missed-limit-picks { display: flex; gap: 6px; }
+.missed-limit-pick {
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 2px solid var(--color-border);
+  background: #fff;
+  text-decoration: none;
+}
+a.missed-limit-pick:hover { border-color: var(--color-primary); }
+.missed-limit-pick.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+}
+
 .daily-chart {
   display: flex;
   align-items: flex-end;

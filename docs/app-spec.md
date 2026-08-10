@@ -118,8 +118,9 @@ survive re-marking. A second row of tiles covers the quiz: points, share
 answered right, and questions today. Quiz points and flashcard marks are
 deliberately separate currencies — a quiz answer doesn't change a word's
 Got it / Need More Review state, and doesn't move the header score chip.
-Below that, a **Words you miss the most** table ranks the top ten all-time
-trouble spots across both halves of the app — every Need More Review click
+Below that, a **Words you miss the most** table ranks all-time trouble spots
+(top 20 by default; pills switch to top 40 or everything via `?missed=`)
+across both halves of the app — every Need More Review click
 plus every quiz answer that earned nothing (a claimed "right anyway" answer
 is not a miss) — with the flashcard/quiz breakdown per word; misses stay
 counted even after the word is later gotten right, and the table links to
