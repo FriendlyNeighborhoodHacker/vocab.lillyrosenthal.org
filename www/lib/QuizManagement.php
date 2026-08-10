@@ -480,9 +480,9 @@ class QuizManagement {
      * earned nothing (a claimed "right anyway" answer is not a miss). Rows are
      * [id, word, definition, flashcard_misses, quiz_misses, total_misses],
      * most-missed first; words never missed don't appear. A null $limit
-     * returns every word ever missed.
+     * returns every word ever missed; a $tagId scopes to that deck's words.
      */
-    public static function getMostMissedWordsForUser(int $userId, ?int $limit = 20): array {
+    public static function getMostMissedWordsForUser(int $userId, ?int $limit = 20, ?int $tagId = null): array {
         $sql = 'SELECT w.id, w.word, w.definition,
                        COALESCE(s.needs_review_count, 0) AS flashcard_misses,
                        COALESCE(q.quiz_misses, 0) AS quiz_misses,
@@ -495,8 +495,11 @@ class QuizManagement {
                     WHERE user_id = :uid_quiz
                     GROUP BY word_id
                 ) q ON q.word_id = w.id
-                WHERE COALESCE(s.needs_review_count, 0) + COALESCE(q.quiz_misses, 0) > 0
-                ORDER BY total_misses DESC, w.word ASC';
+                WHERE COALESCE(s.needs_review_count, 0) + COALESCE(q.quiz_misses, 0) > 0';
+        if ($tagId !== null) {
+            $sql .= ' AND w.id IN (SELECT word_id FROM word_tags WHERE tag_id = :tag_id)';
+        }
+        $sql .= ' ORDER BY total_misses DESC, w.word ASC';
         if ($limit !== null) {
             $sql .= ' LIMIT :lim';
         }
@@ -504,6 +507,9 @@ class QuizManagement {
         $st = self::pdo()->prepare($sql);
         $st->bindValue(':uid_state', $userId, PDO::PARAM_INT);
         $st->bindValue(':uid_quiz', $userId, PDO::PARAM_INT);
+        if ($tagId !== null) {
+            $st->bindValue(':tag_id', $tagId, PDO::PARAM_INT);
+        }
         if ($limit !== null) {
             $st->bindValue(':lim', max(1, $limit), PDO::PARAM_INT);
         }
@@ -522,24 +528,27 @@ class QuizManagement {
     /**
      * The quiz half of a user's progress: lifetime points, questions answered,
      * how many landed (spelled right, near enough, or claimed), the resulting
-     * accuracy percentage, and today's slice of the same.
+     * accuracy percentage, and today's slice of the same. A $tagId scopes it
+     * to answers about that deck's words.
      */
-    public static function getQuizStatsForUser(int $userId): array {
-        $landed = "SUM(result IN ('correct','close') OR was_overridden = 1)";
+    public static function getQuizStatsForUser(int $userId, ?int $tagId = null): array {
+        $landed = "SUM(a.result IN ('correct','close') OR a.was_overridden = 1)";
+        $tagJoin = $tagId !== null ? ' INNER JOIN word_tags wt ON wt.word_id = a.word_id AND wt.tag_id = ?' : '';
+        $tagParams = $tagId !== null ? [$tagId] : [];
 
         $st = self::pdo()->prepare(
-            "SELECT COUNT(*) AS answered, COALESCE(SUM(points_awarded), 0) AS points,
+            "SELECT COUNT(*) AS answered, COALESCE(SUM(a.points_awarded), 0) AS points,
                     COALESCE({$landed}, 0) AS correct
-             FROM quiz_attempts WHERE user_id = ?"
+             FROM quiz_attempts a{$tagJoin} WHERE a.user_id = ?"
         );
-        $st->execute([$userId]);
+        $st->execute(array_merge($tagParams, [$userId]));
         $all = $st->fetch() ?: [];
 
         $st = self::pdo()->prepare(
-            "SELECT COUNT(*) AS answered, COALESCE(SUM(points_awarded), 0) AS points
-             FROM quiz_attempts WHERE user_id = ? AND created_at >= CURDATE()"
+            "SELECT COUNT(*) AS answered, COALESCE(SUM(a.points_awarded), 0) AS points
+             FROM quiz_attempts a{$tagJoin} WHERE a.user_id = ? AND a.created_at >= CURDATE()"
         );
-        $st->execute([$userId]);
+        $st->execute(array_merge($tagParams, [$userId]));
         $today = $st->fetch() ?: [];
 
         $answered = (int)($all['answered'] ?? 0);

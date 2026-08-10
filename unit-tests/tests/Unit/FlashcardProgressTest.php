@@ -257,7 +257,7 @@ final class FlashcardProgressTest extends TestCase
         FlashcardProgress::markWord($this->userCtx, $this->wordIds[1], FlashcardProgress::MARK_NEEDS_REVIEW);
         FlashcardProgress::setWordFlag($this->userCtx, $this->wordIds[2], true);
 
-        $stats = FlashcardProgress::getStatsForUser($this->userCtx->id, 14);
+        $stats = FlashcardProgress::getStatsForUser($this->userCtx->id, null, 14);
         $this->assertSame(1, $stats['mastered']);
         $this->assertSame(1, $stats['needs_review']);
         $this->assertSame(1, $stats['flagged']);
@@ -265,5 +265,35 @@ final class FlashcardProgressTest extends TestCase
         $this->assertSame(2, $stats['reviewed_today']);
         $this->assertCount(14, $stats['daily_reviews']);
         $this->assertSame(2, end($stats['daily_reviews'])['count']); // today is the last bucket
+    }
+
+    public function testStatsScopedToOneDeck(): void
+    {
+        // Green holds abate + brusque; candor stays outside the deck.
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[0], ['Green']);
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[1], ['Green']);
+        $tags = array_column(WordManagement::listAllTags(), null, 'name');
+        $greenId = (int)$tags['Green']['id'];
+
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds[0], FlashcardProgress::MARK_GOT_IT);
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds[1], FlashcardProgress::MARK_NEEDS_REVIEW);
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds[2], FlashcardProgress::MARK_NEEDS_REVIEW);
+        FlashcardProgress::setWordFlag($this->userCtx, $this->wordIds[2], true);
+
+        $stats = FlashcardProgress::getStatsForUser($this->userCtx->id, $greenId);
+        $this->assertSame(1, $stats['mastered']);
+        $this->assertSame(2, $stats['total_words']);
+        $this->assertSame(1, $stats['needs_review']);   // candor's miss is outside the deck
+        $this->assertSame(0, $stats['flagged']);        // so is its flag
+        $this->assertSame(2, $stats['total_reviews']);
+        $this->assertSame(2, $stats['reviewed_today']);
+        $this->assertSame(2, end($stats['daily_reviews'])['count']);
+
+        // The unscoped numbers still see everything.
+        $all = FlashcardProgress::getStatsForUser($this->userCtx->id);
+        $this->assertSame(3, $all['total_words']);
+        $this->assertSame(2, $all['needs_review']);
+        $this->assertSame(1, $all['flagged']);
+        $this->assertSame(3, $all['total_reviews']);
     }
 }

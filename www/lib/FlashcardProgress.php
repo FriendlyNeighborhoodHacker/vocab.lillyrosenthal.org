@@ -204,17 +204,25 @@ class FlashcardProgress {
 
     // The header score chip: mastered = words whose latest mark is Got it.
     // Returns ['mastered' => int, 'total_words' => int, 'reviewed_today' => int].
-    public static function getScoreSummary(int $userId): array {
+    // A $tagId scopes everything to the words in that deck.
+    public static function getScoreSummary(int $userId, ?int $tagId = null): array {
         $pdo = self::pdo();
+        [$tagJoin, $tagParams] = self::tagScope($tagId);
 
-        $st = $pdo->prepare("SELECT COUNT(*) AS c FROM user_word_state WHERE user_id = ? AND last_mark = 'got_it'");
-        $st->execute([$userId]);
+        $st = $pdo->prepare("SELECT COUNT(*) AS c FROM user_word_state x{$tagJoin} WHERE x.user_id = ? AND x.last_mark = 'got_it'");
+        $st->execute(array_merge($tagParams, [$userId]));
         $mastered = (int)$st->fetch()['c'];
 
-        $total = (int)$pdo->query('SELECT COUNT(*) AS c FROM words')->fetch()['c'];
+        if ($tagId === null) {
+            $total = (int)$pdo->query('SELECT COUNT(*) AS c FROM words')->fetch()['c'];
+        } else {
+            $st = $pdo->prepare('SELECT COUNT(*) AS c FROM word_tags WHERE tag_id = ?');
+            $st->execute([$tagId]);
+            $total = (int)$st->fetch()['c'];
+        }
 
-        $st = $pdo->prepare('SELECT COUNT(*) AS c FROM word_review_events WHERE user_id = ? AND created_at >= CURDATE()');
-        $st->execute([$userId]);
+        $st = $pdo->prepare("SELECT COUNT(*) AS c FROM word_review_events x{$tagJoin} WHERE x.user_id = ? AND x.created_at >= CURDATE()");
+        $st->execute(array_merge($tagParams, [$userId]));
         $reviewedToday = (int)$st->fetch()['c'];
 
         return [
@@ -224,34 +232,44 @@ class FlashcardProgress {
         ];
     }
 
+    // The JOIN + params that restrict a per-word table (aliased x) to one
+    // deck's words; no-ops when $tagId is null.
+    private static function tagScope(?int $tagId): array {
+        if ($tagId === null) {
+            return ['', []];
+        }
+        return [' INNER JOIN word_tags wt ON wt.word_id = x.word_id AND wt.tag_id = ?', [$tagId]];
+    }
+
     // Everything the stats page shows: the score summary plus needs-review /
     // flagged counts, the all-time review total, and daily review counts for
     // the last $days days (['date' => 'Y-m-d', 'count' => int], oldest first,
-    // including zero days).
-    public static function getStatsForUser(int $userId, int $days = 14): array {
+    // including zero days). A $tagId scopes it all to one deck's words.
+    public static function getStatsForUser(int $userId, ?int $tagId = null, int $days = 14): array {
         $pdo = self::pdo();
-        $stats = self::getScoreSummary($userId);
+        $stats = self::getScoreSummary($userId, $tagId);
+        [$tagJoin, $tagParams] = self::tagScope($tagId);
 
-        $st = $pdo->prepare("SELECT COUNT(*) AS c FROM user_word_state WHERE user_id = ? AND last_mark = 'needs_review'");
-        $st->execute([$userId]);
+        $st = $pdo->prepare("SELECT COUNT(*) AS c FROM user_word_state x{$tagJoin} WHERE x.user_id = ? AND x.last_mark = 'needs_review'");
+        $st->execute(array_merge($tagParams, [$userId]));
         $stats['needs_review'] = (int)$st->fetch()['c'];
 
-        $st = $pdo->prepare('SELECT COUNT(*) AS c FROM user_word_state WHERE user_id = ? AND is_flagged = 1');
-        $st->execute([$userId]);
+        $st = $pdo->prepare("SELECT COUNT(*) AS c FROM user_word_state x{$tagJoin} WHERE x.user_id = ? AND x.is_flagged = 1");
+        $st->execute(array_merge($tagParams, [$userId]));
         $stats['flagged'] = (int)$st->fetch()['c'];
 
-        $st = $pdo->prepare('SELECT COUNT(*) AS c FROM word_review_events WHERE user_id = ?');
-        $st->execute([$userId]);
+        $st = $pdo->prepare("SELECT COUNT(*) AS c FROM word_review_events x{$tagJoin} WHERE x.user_id = ?");
+        $st->execute(array_merge($tagParams, [$userId]));
         $stats['total_reviews'] = (int)$st->fetch()['c'];
 
         $days = max(1, $days);
         $st = $pdo->prepare(
-            'SELECT DATE(created_at) AS day, COUNT(*) AS c
-             FROM word_review_events
-             WHERE user_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-             GROUP BY DATE(created_at)'
+            "SELECT DATE(x.created_at) AS day, COUNT(*) AS c
+             FROM word_review_events x{$tagJoin}
+             WHERE x.user_id = ? AND x.created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+             GROUP BY DATE(x.created_at)"
         );
-        $st->execute([$userId, $days - 1]);
+        $st->execute(array_merge($tagParams, [$userId, $days - 1]));
         $byDay = [];
         foreach ($st->fetchAll() as $row) {
             $byDay[(string)$row['day']] = (int)$row['c'];

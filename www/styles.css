@@ -577,6 +577,16 @@ pre.import-example {
 
 .progress-section-head { margin: 26px 0 0; }
 
+.progress-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.progress-toolbar h2 { margin: 0; }
+.progress-deck-note { margin: 4px 0 0; }
+
 .missed-toolbar {
   display: flex;
   justify-content: space-between;

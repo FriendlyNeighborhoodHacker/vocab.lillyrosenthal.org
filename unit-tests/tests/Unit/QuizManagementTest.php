@@ -630,6 +630,31 @@ final class QuizManagementTest extends TestCase
         $this->assertSame(['abate', 'brusque'], array_column($all, 'word'));
     }
 
+    public function testQuizStatsAndMostMissedCanBeScopedToOneDeck(): void
+    {
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds['abate'], ['Green']);
+        $tags = array_column(WordManagement::listAllTags(), null, 'name');
+        $greenId = (int)$tags['Green']['id'];
+
+        // One miss inside the deck (abate), one right answer and one miss outside it.
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'nope');
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['brusque'], QuizManagement::MODE_GUESS_WORD, 'brusque');
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['candor'], QuizManagement::MODE_GUESS_WORD, 'nope');
+
+        $green = QuizManagement::getQuizStatsForUser($this->userCtx->id, $greenId);
+        $this->assertSame(1, $green['answered']);
+        $this->assertSame(0, $green['correct']);
+        $this->assertSame(0, $green['points']);
+        $this->assertSame(1, $green['answered_today']);
+
+        $all = QuizManagement::getQuizStatsForUser($this->userCtx->id);
+        $this->assertSame(3, $all['answered']);
+        $this->assertSame(QuizManagement::POINTS_CORRECT, $all['points']);
+
+        $missed = QuizManagement::getMostMissedWordsForUser($this->userCtx->id, null, $greenId);
+        $this->assertSame(['abate'], array_column($missed, 'word'));
+    }
+
     // --- stats ---
 
     public function testQuizStatsSummarizeThePlayerOnly(): void
