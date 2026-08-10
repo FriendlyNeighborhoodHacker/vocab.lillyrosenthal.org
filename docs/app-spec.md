@@ -112,7 +112,9 @@ mark is Got it — with a "N today" subline. Links to the stats page.
 **Stats** (`/progress/` — note: NOT `/stats/`, which shared hosts shadow with
 their web-statistics alias): big-number tiles (Got it, Need more review,
 Flagged, Reviewed today, all-time total) and a pure-CSS bar chart of the last
-14 days of review activity. Every Got it / Need More Review click is recorded
+14 days of review activity. A deck picker (`?tag=`) scopes every number on
+the page — tiles, chart, quiz stats, and the most-missed table — to one
+deck's words, and the page's review/quiz links carry the chosen deck along. Every Got it / Need More Review click is recorded
 in an append-only events table, so per-word counters and daily history both
 survive re-marking. A second row of tiles covers the quiz: points, share
 answered right, and questions today. Quiz points and flashcard marks are
@@ -214,7 +216,7 @@ alongside any migration.
 - Local: create DB `vocab_lillyrosenthal`, load `www/schema.sql`, copy
   `config.local.php.example` → `config.local.php`, `php -S localhost:8080 -t www`.
 - Tests: `php unit-tests/tools/phpunit.phar -c unit-tests/phpunit.xml` —
-  117 unit tests over the lib classes (DI via `set_pdo_for_testing`; the
+  119 unit tests over the lib classes (DI via `set_pdo_for_testing`; the
   bootstrap drops/recreates `vocab_lillyrosenthal_test` from schema.sql).
   No endpoint or UI tests, per guidelines.
 - Production: Apache-style shared host, docroot at `www/`; `.htaccess` denies
