@@ -97,6 +97,12 @@ practice. Two modes, both "type the word":
   them but unmarked — tapping a chip fills the answer box). The chip list is
   embedded as word texts only; answers are still judged on the server.
   Round ends on a summary: points, accuracy, best streak.
+- **A refresh doesn't lose the round.** Progress (the dealt questions, place,
+  and session tallies) is snapshotted to `sessionStorage` at each verdict and
+  restored on reload into the same settings; since the answer was already
+  recorded server-side, resuming lands on the *next* question rather than
+  re-asking a word whose answer was just revealed. The snapshot clears when
+  the round ends, so "Play again" always deals fresh.
 - Keyboard: enter checks the answer, enter again moves on.
 
 **Score chip** (top-right of the header on every page, repainted live after

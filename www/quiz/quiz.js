@@ -1,6 +1,7 @@
 // Typing-quiz engine. The page embeds QUESTIONS (prompts only — the answers
-// stay on the server), QUIZ_MODE, and CSRF. Every answer POSTs to
-// answer_eval.php and waits for the verdict; nothing is judged in the browser.
+// stay on the server), WORD_LIST (word texts for the letter hint), QUIZ_MODE,
+// ROUND_SETTINGS, and CSRF. Every answer POSTs to answer_eval.php and waits
+// for the verdict; nothing is judged in the browser.
 (function () {
   'use strict';
 
