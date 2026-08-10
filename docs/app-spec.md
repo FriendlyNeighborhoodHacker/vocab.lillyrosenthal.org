@@ -24,8 +24,10 @@ request it grew from is preserved at the bottom.
   Marks are per-user, saved by AJAX with optimistic UI (the deck advances
   immediately; failures surface in a toast — errors are never swallowed).
 - `<` / `>` buttons flanking the card (and ←/→ keys) browse backward and
-  forward without marking. Keyboard: space=flip, 1=got it, 2=needs review,
-  f=flag, ←/→=navigate.
+  forward without marking. The `>` button only appears once the card you're
+  on has ever been marked (`marked` in the deck JSON) — the way forward is
+  earned card by card; marking a card reveals it immediately. Keyboard:
+  space=flip, 1=got it, 2=needs review, f=flag, ←/→=navigate.
 - Flag icon top-right of the card (visible on both faces): per-user toggle,
   AJAX-saved.
 - **Deck tabs**: All words / Flagged / Misses (words whose latest mark is
@@ -97,8 +99,16 @@ practice. Two modes, both "type the word":
   them but unmarked — tapping a chip fills the answer box). The chip list is
   embedded as word texts only; answers are still judged on the server.
   Round ends on a summary: points, accuracy, best streak.
+- **Look back / forward arrows** above the quiz card: every verdict is kept
+  client-side, so "← Look back" re-shows any answered question's feedback
+  (calmer 📖 header, no claim button, dashed border). "Forward →" only
+  appears when the question on screen has been answered — never past an
+  unanswered one — and returns to the live question, restoring any half-typed
+  answer. ←/→ keys mirror the buttons (except while typing in the answer
+  box); Enter while looking back steps forward.
 - **A refresh doesn't lose the round.** Progress (the dealt questions, place,
-  and session tallies) is snapshotted to `sessionStorage` at each verdict and
+  and session tallies — including kept verdicts, so look-back survives) is
+  snapshotted to `sessionStorage` at each verdict and
   restored on reload into the same settings; since the answer was already
   recorded server-side, resuming lands on the *next* question rather than
   re-asking a word whose answer was just revealed. The snapshot clears when
