@@ -43,6 +43,7 @@ $deckJson = array_map(fn($row) => [
     'sentences' => (string)($row['sentences'] ?? ''),
     'synonyms' => (string)($row['synonyms'] ?? ''),
     'flagged' => !empty($row['is_flagged']),
+    'marked' => !empty($row['last_mark']),   // ever answered Got it / Need More Review
 ], $deck);
 
 $deckLabels = [

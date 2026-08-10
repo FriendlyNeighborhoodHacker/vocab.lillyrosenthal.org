@@ -112,6 +112,9 @@
     flagBtn.classList.toggle('flagged', entry.flagged);
     flagBtn.setAttribute('aria-pressed', entry.flagged ? 'true' : 'false');
     btnPrev.disabled = idx === 0;
+    // Forward only appears once this card has been marked — the way ahead is
+    // earned card by card. (concealed, not hidden, so the card doesn't shift.)
+    btnNext.classList.toggle('concealed', !entry.marked);
   }
 
   function flipCard() {
@@ -129,11 +132,15 @@
   }
 
   function goBack() { goTo(idx - 1); }
-  function goForward() { goTo(idx + 1); }
+  function goForward() {
+    if (idx < DECK.length && !DECK[idx].marked) return;   // mark it to move on
+    goTo(idx + 1);
+  }
 
   function markCurrent(mark) {
     if (idx >= DECK.length) return;
     var entry = DECK[idx];
+    entry.marked = true;
     if (mark === 'got_it') { sessionGot++; } else { sessionMiss++; }
 
     // Optimistic UI: advance immediately, report errors via toast.

@@ -94,6 +94,10 @@ header_html(QuizManagement::modeLabel($mode));
   </div>
 
   <div class="quiz-stage" id="quiz-stage">
+    <div class="quiz-nav">
+      <button type="button" class="quiz-nav-btn hidden" id="quiz-prev-btn" aria-label="Back to the previous question">&#8592; Look back</button>
+      <button type="button" class="quiz-nav-btn hidden" id="quiz-fwd-btn" aria-label="Forward to the next question">Forward &#8594;</button>
+    </div>
     <div class="quiz-card">
       <div class="quiz-points-chip" id="quiz-points-chip"><span id="quiz-points">0</span> pts</div>
       <div class="quiz-streak hidden" id="quiz-streak"></div>

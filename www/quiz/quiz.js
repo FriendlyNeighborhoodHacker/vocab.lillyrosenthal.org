@@ -50,6 +50,14 @@
   var currentAttemptId = null;
   var busy = false;
 
+  // Every verdict is kept (answers[n] mirrors questions[n]) so the back arrow
+  // can re-show any answered question. reviewIdx is the question being looked
+  // back at, or null when on the live question; stashedTyping preserves a
+  // half-typed answer across a look back.
+  var answers = [];
+  var reviewIdx = null;
+  var stashedTyping = '';
+
   // A refresh survives the round: progress is snapshotted to sessionStorage at
   // each verdict (the answer is already recorded server-side by then, so the
   // snapshot points at the NEXT question — resuming never re-asks a word whose
@@ -75,6 +83,7 @@
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
         settings: ROUND_SETTINGS,
         questions: questions,
+        answers: answers,
         nextIdx: idx + 1,
         points: sessionPoints,
         right: sessionRight,
@@ -92,6 +101,7 @@
   var questions = restored ? restored.questions : QUESTIONS;
   if (restored) {
     idx = restored.nextIdx;
+    answers = Array.isArray(restored.answers) ? restored.answers : [];
     sessionPoints = restored.points || 0;
     sessionRight = restored.right || 0;
     streak = restored.streak || 0;
@@ -104,6 +114,8 @@
   var hintEl = document.getElementById('quiz-hint');
   var choicesBtn = document.getElementById('quiz-choices-btn');
   var choicesEl = document.getElementById('quiz-choices');
+  var prevBtn = document.getElementById('quiz-prev-btn');
+  var fwdBtn = document.getElementById('quiz-fwd-btn');
   var form = document.getElementById('quiz-form');
   var input = document.getElementById('quiz-input');
   var checkBtn = document.getElementById('quiz-check');
@@ -165,11 +177,66 @@
   }
 
   function renderProgress() {
+    if (reviewIdx !== null) {
+      progressText.textContent = 'Looking back at question ' + (reviewIdx + 1) + ' of ' + questions.length;
+      return;                    // the fill bar keeps showing the real frontier
+    }
     var done = Math.min(idx, questions.length);
     progressFill.style.width = (done / questions.length) * 100 + '%';
     progressText.textContent = done < questions.length
       ? 'Question ' + (done + 1) + ' of ' + questions.length
       : questions.length + ' of ' + questions.length;
+  }
+
+  // ----- looking back at answered questions -----
+
+  function currentPos() {
+    return reviewIdx === null ? idx : reviewIdx;
+  }
+
+  // Back appears whenever there is something behind; forward appears only when
+  // the question being looked at has already been answered (so it can never
+  // skip ahead past an unanswered one).
+  function renderNav() {
+    prevBtn.classList.toggle('hidden', currentPos() === 0);
+    fwdBtn.classList.toggle('hidden', reviewIdx === null && phase !== 'feedback');
+  }
+
+  function goBack() {
+    if (busy || currentPos() === 0) return;
+    if (reviewIdx === null && phase === 'asking') {
+      stashedTyping = input.value;   // don't lose a half-typed answer
+    }
+    showReview(currentPos() - 1);
+  }
+
+  function goForward() {
+    if (busy) return;
+    if (reviewIdx !== null) {
+      if (reviewIdx + 1 === idx) {
+        exitReview();
+      } else {
+        showReview(reviewIdx + 1);
+      }
+    } else if (phase === 'feedback') {
+      nextQuestion();
+    }
+  }
+
+  function showReview(n) {
+    reviewIdx = n;
+    renderAnsweredView(n, false);
+  }
+
+  function exitReview() {
+    reviewIdx = null;
+    if (phase === 'asking') {
+      renderQuestion();
+      input.value = stashedTyping;
+    } else {
+      renderAnsweredView(idx, true);
+      nextBtn.focus({ preventScroll: true });
+    }
   }
 
   function renderStreak() {
@@ -210,6 +277,7 @@
     input.disabled = false;
     checkBtn.disabled = false;
     renderStreak();
+    renderNav();
     input.focus();
   }
 
@@ -311,7 +379,6 @@
     }
     sessionPoints += res.points;
     pointsEl.textContent = sessionPoints;
-    saveRoundProgress();
 
     var cheer;
     if (res.result === 'correct') {
@@ -324,44 +391,75 @@
       cheer = pick(KIND_MISSES);
     }
 
-    feedback.className = 'quiz-feedback hidden result-' + res.result;
-    fbBurst.textContent = cheer.burst;
-    fbTitle.textContent = cheer.title;
-    fbWord.textContent = res.word;
+    answers[idx] = {
+      result: res.result,
+      points: res.points,
+      word: res.word,
+      definition: res.definition,
+      sentences: res.sentences,
+      synonyms: res.synonyms,
+      typed: typed,
+      claimed: false,
+      canClaim: res.can_claim_correct,
+      burst: cheer.burst,
+      title: cheer.title
+    };
+    saveRoundProgress();
 
-    if (res.result === 'correct') {
-      fbYours.classList.add('hidden');
-    } else {
-      fbYours.textContent = 'You typed "' + typed + '"';
-      fbYours.classList.remove('hidden');
-    }
-
-    // In Guess the Word the definition is the prompt sitting right above, so
-    // repeating it here would just pad the panel.
-    fbDefinition.textContent = res.definition;
-    fbDefinition.classList.toggle('hidden', QUIZ_MODE === 'guess_word');
-    fbSentence.textContent = res.sentences || '';
-    fbSentence.classList.toggle('hidden', !res.sentences);
-    fbSynonyms.textContent = res.synonyms ? 'Similar: ' + res.synonyms : '';
-    fbSynonyms.classList.toggle('hidden', !res.synonyms);
-    fbPoints.textContent = res.points > 0 ? '+' + res.points + ' points' : 'No points this time';
-
-    // The escape hatch: a definition can fit more than one word, so anything
-    // that scored nothing can be claimed as right anyway.
-    claimBtn.classList.toggle('hidden', !res.can_claim_correct);
-    claimBtn.disabled = false;
-
-    form.classList.add('hidden');
-    hintBtn.classList.add('hidden');
-    choicesBtn.classList.add('hidden');
-    choicesEl.classList.add('hidden');
-    feedback.classList.remove('hidden');
+    renderAnsweredView(idx, true);
     renderStreak();
 
     // Show the verdict from the top — focusing the button alone would scroll a
     // phone straight past the word we just revealed.
     feedback.scrollIntoView({ block: 'nearest' });
     nextBtn.focus({ preventScroll: true });
+  }
+
+  // The feedback panel, filled from a stored verdict. Live shows the cheer and
+  // the claim button; a look back shows a calmer "already answered" header.
+  function renderAnsweredView(n, live) {
+    var a = answers[n];
+
+    renderPrompt(promptEl, questions[n].prompt);
+    form.classList.add('hidden');
+    hintBtn.classList.add('hidden');
+    hintEl.classList.add('hidden');
+    choicesBtn.classList.add('hidden');
+    choicesEl.classList.add('hidden');
+
+    feedback.className = 'quiz-feedback result-' + a.result
+      + (a.claimed ? ' claimed' : '')
+      + (live ? '' : ' quiz-reviewing');
+    fbBurst.textContent = live ? a.burst : '📖';
+    fbTitle.textContent = live ? a.title : 'You answered this one already';
+    fbWord.textContent = a.word;
+
+    if (a.result === 'correct') {
+      fbYours.classList.add('hidden');
+    } else {
+      fbYours.textContent = 'You typed "' + a.typed + '"';
+      fbYours.classList.remove('hidden');
+    }
+
+    // In Guess the Word the definition is the prompt sitting right above, so
+    // repeating it here would just pad the panel.
+    fbDefinition.textContent = a.definition;
+    fbDefinition.classList.toggle('hidden', QUIZ_MODE === 'guess_word');
+    fbSentence.textContent = a.sentences || '';
+    fbSentence.classList.toggle('hidden', !a.sentences);
+    fbSynonyms.textContent = a.synonyms ? 'Similar: ' + a.synonyms : '';
+    fbSynonyms.classList.toggle('hidden', !a.synonyms);
+    fbPoints.textContent = a.points > 0
+      ? '+' + a.points + ' points' + (a.claimed ? ' — counted!' : '')
+      : 'No points this time';
+
+    // The escape hatch: a definition can fit more than one word, so anything
+    // that scored nothing can be claimed as right anyway. Live only.
+    claimBtn.classList.toggle('hidden', !(live && a.canClaim && !a.claimed));
+    claimBtn.disabled = false;
+
+    renderProgress();
+    renderNav();
   }
 
   function claimCorrect() {
@@ -378,6 +476,8 @@
         sessionPoints += res.points;
         sessionRight++;
         pointsEl.textContent = sessionPoints;
+        answers[idx].claimed = true;
+        answers[idx].points = res.points;
         saveRoundProgress();
         claimBtn.classList.add('hidden');
         fbPoints.textContent = '+' + res.points + ' points — counted!';
@@ -391,6 +491,7 @@
   }
 
   function nextQuestion() {
+    if (reviewIdx !== null) { goForward(); return; }
     if (phase !== 'feedback') return;
     idx++;
     feedback.classList.remove('claimed');
@@ -430,10 +531,24 @@
   choicesBtn.addEventListener('click', showChoices);
   claimBtn.addEventListener('click', claimCorrect);
   nextBtn.addEventListener('click', nextQuestion);
+  prevBtn.addEventListener('click', goBack);
+  fwdBtn.addEventListener('click', goForward);
 
-  // Enter moves on from the verdict even when focus has wandered off the button.
+  // Enter moves on from the verdict even when focus has wandered off the
+  // button; the arrow keys mirror the nav buttons (except while typing, where
+  // they have to keep moving the cursor).
   document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Enter' || phase !== 'feedback') return;
+    if (e.target !== input) {
+      if (e.key === 'ArrowLeft') { goBack(); return; }
+      if (e.key === 'ArrowRight') { goForward(); return; }
+    }
+    if (e.key !== 'Enter') return;
+    if (reviewIdx !== null) {
+      e.preventDefault();
+      goForward();
+      return;
+    }
+    if (phase !== 'feedback') return;
     if (e.target === nextBtn || e.target === claimBtn) return;
     e.preventDefault();
     nextQuestion();
