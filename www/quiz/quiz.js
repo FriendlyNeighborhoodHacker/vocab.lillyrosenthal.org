@@ -49,10 +49,60 @@
   var currentAttemptId = null;
   var busy = false;
 
+  // A refresh survives the round: progress is snapshotted to sessionStorage at
+  // each verdict (the answer is already recorded server-side by then, so the
+  // snapshot points at the NEXT question — resuming never re-asks a word whose
+  // answer was just shown) and cleared when the round ends. The snapshot only
+  // resumes into a round with the same settings; storage failures (private
+  // mode) just mean a refresh deals a fresh round, as before.
+  var STORAGE_KEY = 'quiz-round-in-progress';
+
+  function loadSavedRound() {
+    try {
+      var saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+      if (!saved || saved.settings !== ROUND_SETTINGS) return null;
+      if (!Array.isArray(saved.questions) || !saved.questions.length) return null;
+      if (typeof saved.nextIdx !== 'number' || saved.nextIdx < 0 || saved.nextIdx > saved.questions.length) return null;
+      return saved;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveRoundProgress() {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+        settings: ROUND_SETTINGS,
+        questions: questions,
+        nextIdx: idx + 1,
+        points: sessionPoints,
+        right: sessionRight,
+        streak: streak,
+        bestStreak: bestStreak
+      }));
+    } catch (e) { /* nothing to do — the round just won't survive a refresh */ }
+  }
+
+  function clearSavedRound() {
+    try { sessionStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  }
+
+  var restored = loadSavedRound();
+  var questions = restored ? restored.questions : QUESTIONS;
+  if (restored) {
+    idx = restored.nextIdx;
+    sessionPoints = restored.points || 0;
+    sessionRight = restored.right || 0;
+    streak = restored.streak || 0;
+    bestStreak = restored.bestStreak || 0;
+  }
+
   var stage = document.getElementById('quiz-stage');
   var promptEl = document.getElementById('quiz-prompt');
   var hintBtn = document.getElementById('quiz-hint-btn');
   var hintEl = document.getElementById('quiz-hint');
+  var choicesBtn = document.getElementById('quiz-choices-btn');
+  var choicesEl = document.getElementById('quiz-choices');
   var form = document.getElementById('quiz-form');
   var input = document.getElementById('quiz-input');
   var checkBtn = document.getElementById('quiz-check');
@@ -114,11 +164,11 @@
   }
 
   function renderProgress() {
-    var done = Math.min(idx, QUESTIONS.length);
-    progressFill.style.width = (done / QUESTIONS.length) * 100 + '%';
-    progressText.textContent = done < QUESTIONS.length
-      ? 'Question ' + (done + 1) + ' of ' + QUESTIONS.length
-      : QUESTIONS.length + ' of ' + QUESTIONS.length;
+    var done = Math.min(idx, questions.length);
+    progressFill.style.width = (done / questions.length) * 100 + '%';
+    progressText.textContent = done < questions.length
+      ? 'Question ' + (done + 1) + ' of ' + questions.length
+      : questions.length + ' of ' + questions.length;
   }
 
   function renderStreak() {
@@ -133,12 +183,12 @@
   function renderQuestion() {
     renderProgress();
 
-    if (idx >= QUESTIONS.length) {
+    if (idx >= questions.length) {
       finishRound();
       return;
     }
 
-    var q = QUESTIONS[idx];
+    var q = questions[idx];
     phase = 'asking';
     currentAttemptId = null;
     feedback.classList.add('hidden');
@@ -151,6 +201,9 @@
     hintEl.classList.add('hidden');
     hintEl.textContent = '';
     hintBtn.classList.remove('hidden');
+    choicesBtn.classList.add('hidden');
+    choicesEl.classList.add('hidden');
+    choicesEl.textContent = '';
 
     input.value = '';
     input.disabled = false;
@@ -160,7 +213,7 @@
   }
 
   function showHint() {
-    var q = QUESTIONS[idx];
+    var q = questions[idx];
     hintEl.textContent = '';
 
     var letters = document.createElement('div');
@@ -177,6 +230,35 @@
 
     hintEl.classList.remove('hidden');
     hintBtn.classList.add('hidden');
+    choicesBtn.textContent = 'Show words starting with "' + q.first_letter + '"';
+    choicesBtn.classList.remove('hidden');
+    input.focus();
+  }
+
+  // The second hint: every word in the round's decks that starts with the
+  // answer's first letter, as tappable chips that fill the answer box. The
+  // answer is in the list, but nothing marks it — spotting it is the game.
+  function showChoices() {
+    var q = questions[idx];
+    var letter = String(q.first_letter || '').toLowerCase();
+    choicesEl.textContent = '';
+
+    WORD_LIST.forEach(function (word) {
+      if (word.charAt(0).toLowerCase() !== letter) return;
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'quiz-choice-chip';
+      chip.textContent = word;
+      chip.addEventListener('click', function () {
+        if (phase !== 'asking') return;
+        input.value = word;
+        input.focus();
+      });
+      choicesEl.appendChild(chip);
+    });
+
+    choicesEl.classList.remove('hidden');
+    choicesBtn.classList.add('hidden');
     input.focus();
   }
 
@@ -190,7 +272,7 @@
     checkBtn.disabled = true;
 
     postForm('/quiz/answer_eval.php', {
-      word_id: QUESTIONS[idx].word_id,
+      word_id: questions[idx].word_id,
       mode: QUIZ_MODE,
       answer: answer
     })
@@ -228,6 +310,7 @@
     }
     sessionPoints += res.points;
     pointsEl.textContent = sessionPoints;
+    saveRoundProgress();
 
     var cheer;
     if (res.result === 'correct') {
@@ -269,6 +352,8 @@
 
     form.classList.add('hidden');
     hintBtn.classList.add('hidden');
+    choicesBtn.classList.add('hidden');
+    choicesEl.classList.add('hidden');
     feedback.classList.remove('hidden');
     renderStreak();
 
@@ -292,6 +377,7 @@
         sessionPoints += res.points;
         sessionRight++;
         pointsEl.textContent = sessionPoints;
+        saveRoundProgress();
         claimBtn.classList.add('hidden');
         fbPoints.textContent = '+' + res.points + ' points — counted!';
         feedback.classList.add('claimed');
@@ -311,10 +397,11 @@
   }
 
   function finishRound() {
+    clearSavedRound();
     stage.classList.add('hidden');
     donePanel.classList.remove('hidden');
 
-    var pct = Math.round((sessionRight / QUESTIONS.length) * 100);
+    var pct = Math.round((sessionRight / questions.length) * 100);
     if (pct === 100) {
       doneBurst.textContent = '🏆';
       doneTitle.textContent = 'A perfect round!';
@@ -330,7 +417,7 @@
     }
 
     doneScore.textContent = sessionPoints + ' points';
-    doneTally.textContent = sessionRight + ' of ' + QUESTIONS.length + ' right (' + pct + '%)'
+    doneTally.textContent = sessionRight + ' of ' + questions.length + ' right (' + pct + '%)'
       + (bestStreak >= 3 ? ' · best streak: ' + bestStreak : '');
   }
 
@@ -339,6 +426,7 @@
     submitAnswer();
   });
   hintBtn.addEventListener('click', showHint);
+  choicesBtn.addEventListener('click', showChoices);
   claimBtn.addEventListener('click', claimCorrect);
   nextBtn.addEventListener('click', nextQuestion);
 
@@ -350,5 +438,6 @@
     nextQuestion();
   });
 
+  pointsEl.textContent = sessionPoints;   // restored rounds resume mid-score
   renderQuestion();
 })();

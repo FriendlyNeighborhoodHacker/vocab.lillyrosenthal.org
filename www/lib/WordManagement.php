@@ -143,6 +143,24 @@ class WordManagement {
         return $st->fetchAll();
     }
 
+    // Just the word texts, alphabetized. An empty $tagIds means every word;
+    // several tag ids means the union of those decks (the same contract as
+    // quiz rounds, so a round's answer is always in the list).
+    public static function listWordTexts(array $tagIds = []): array {
+        $tagIds = array_values(array_unique(array_filter(array_map('intval', $tagIds), fn($id) => $id > 0)));
+
+        $sql = 'SELECT word FROM words';
+        if ($tagIds) {
+            $placeholders = implode(',', array_fill(0, count($tagIds), '?'));
+            $sql .= ' WHERE id IN (SELECT word_id FROM word_tags WHERE tag_id IN (' . $placeholders . '))';
+        }
+        $sql .= ' ORDER BY word';
+
+        $st = self::pdo()->prepare($sql);
+        $st->execute($tagIds);
+        return array_map(fn($row) => (string)$row['word'], $st->fetchAll());
+    }
+
     // ===== Tags (decks) =====
 
     // "White and Blue; Green" or "Green, Red" -> ['White and Blue', 'Green'].

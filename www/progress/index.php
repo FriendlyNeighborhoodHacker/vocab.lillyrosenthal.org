@@ -9,6 +9,7 @@ require_login();
 $me = current_user();
 $stats = FlashcardProgress::getStatsForUser((int)$me['id']);
 $quiz = QuizManagement::getQuizStatsForUser((int)$me['id']);
+$mostMissed = QuizManagement::getMostMissedWordsForUser((int)$me['id']);
 
 $maxDaily = 0;
 foreach ($stats['daily_reviews'] as $day) {
@@ -85,6 +86,40 @@ header_html('My Stats');
     </div>
   </div>
 <?php endif; ?>
+
+<h3 class="progress-section-head">Words you miss the most &#128269;</h3>
+<div class="card">
+  <?php if (!$mostMissed): ?>
+    <p class="small">Nothing missed yet — every flashcard you mark Need More Review and every quiz answer that doesn't land shows up here.</p>
+  <?php else: ?>
+    <p class="small">Counting every Need More Review on a flashcard and every quiz answer that didn't earn points.</p>
+    <div class="table-scroll">
+      <table class="list">
+        <thead>
+          <tr>
+            <th>Word</th>
+            <th>Definition</th>
+            <th>Misses</th>
+            <th>Flashcards</th>
+            <th>Quizzes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($mostMissed as $row): ?>
+            <tr>
+              <td><strong><?= h($row['word']) ?></strong></td>
+              <td><?= h($row['definition']) ?></td>
+              <td><strong><?= number_format($row['total_misses']) ?></strong></td>
+              <td><?= number_format($row['flashcard_misses']) ?></td>
+              <td><?= number_format($row['quiz_misses']) ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <p class="small"><a href="/quiz/?source=misses">Quiz me on my misses</a> &middot; <a href="/review/?deck=needs_review">flip through them</a></p>
+  <?php endif; ?>
+</div>
 
 <div class="actions">
   <a class="button primary" href="/review/">Keep reviewing &#8594;</a>

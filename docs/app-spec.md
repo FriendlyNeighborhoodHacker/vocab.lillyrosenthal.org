@@ -52,9 +52,27 @@ practice. Two modes, both "type the word":
 - **Fill in the Blank**: the word's example sentence with the word cut out.
   Only words whose sentence actually uses the word can be asked, so this mode
   has a slightly smaller pool (255 of 256 words today).
-- The launcher picks the mode, **any combination of decks** (tag checkboxes —
-  none ticked = every word), and a round length (10 / 20 / 40 / everything).
-  Rounds are shuffled fresh each time.
+- The launcher picks the mode, the **pool of words**, **any combination of
+  decks** (tag checkboxes — none ticked = every word), and a round length
+  (10 / 20 / 40 / everything). The three pools are:
+  - **All words** — the whole deck, dealt least-recently-practiced first.
+  - **Words I miss** — words whose latest flashcard mark is Need More Review,
+    *or* that were missed in a quiz and not got right since. It deliberately
+    spans both halves of the app, so its count won't match the flashcards'
+    Misses tab exactly. Claiming an answer as right anyway clears the word.
+  - **Flagged words** — the words flagged while going through the flashcards.
+  Counts sit beside each pool and follow the mode you pick (`quiz_setup.js`);
+  an empty pool is greyed out rather than hidden, and play.php explains any
+  empty round with a way back.
+- **Rounds remember what you've already practiced.** Words are dealt
+  least-recently-quizzed first — never-quizzed words lead, then the
+  longest-ago ones, with ties broken at random so rounds don't open the same
+  way twice; the chosen questions are then shuffled for asking. So a second
+  round moves on to words the first didn't cover, and the deck is worked
+  through completely before anything repeats: all 256 words in 13 rounds of
+  20, against roughly 77 rounds if each round sampled the deck afresh. After a
+  full pass it wraps around, still oldest-first. Recency is per user and
+  shared across both modes.
 - **Answers are judged on the server.** The page receives prompts only, never
   the answers; each answer POSTs to `answer_eval.php` and waits for the verdict.
   Definitions are also blanked if they happen to contain the word.
@@ -74,7 +92,11 @@ practice. Two modes, both "type the word":
   type, and the sentence/synonyms to read. Wrong answers get an encouraging
   message, never a scolding. A "Need a hint?" button reveals the letter count,
   the first letter, and the other side of the word (its sentence, or its
-  definition). Round ends on a summary: points, accuracy, best streak.
+  definition); after that, a second button lists every word in the round's
+  decks starting with that letter as tappable chips (the answer is among
+  them but unmarked — tapping a chip fills the answer box). The chip list is
+  embedded as word texts only; answers are still judged on the server.
+  Round ends on a summary: points, accuracy, best streak.
 - Keyboard: enter checks the answer, enter again moves on.
 
 **Score chip** (top-right of the header on every page, repainted live after
@@ -90,6 +112,12 @@ survive re-marking. A second row of tiles covers the quiz: points, share
 answered right, and questions today. Quiz points and flashcard marks are
 deliberately separate currencies — a quiz answer doesn't change a word's
 Got it / Need More Review state, and doesn't move the header score chip.
+Below that, a **Words you miss the most** table ranks the top ten all-time
+trouble spots across both halves of the app — every Need More Review click
+plus every quiz answer that earned nothing (a claimed "right anyway" answer
+is not a miss) — with the flashcard/quiz breakdown per word; misses stay
+counted even after the word is later gotten right, and the table links to
+the misses quiz pool and the Misses flashcard deck.
 
 **Account**: change password (`/profile/change_password.php`), logout.
 Remember-me is a stateless HMAC cookie invalidated by password changes;
@@ -163,9 +191,10 @@ alongside any migration.
   server-rendered, only writes are AJAX), `review.js` (deck engine),
   `mark_word_eval.php`, `toggle_flag_eval.php`, `save_position_eval.php`
   (JSON), `shuffle_eval.php`, `order_eval.php` (PRG).
-- `quiz/` — `index.php` (launcher: mode, decks, round length), `play.php`
-  (embeds the round's prompts as JSON), `quiz.js` (quiz engine),
-  `answer_eval.php` and `claim_correct_eval.php` (JSON).
+- `quiz/` — `index.php` (launcher: mode, word pool, decks, round length) with
+  `quiz_setup.js` (live pool counts), `play.php` (embeds the round's prompts as
+  JSON), `quiz.js` (quiz engine), `answer_eval.php` and
+  `claim_correct_eval.php` (JSON).
 - `progress/index.php` — stats page.
 - `admin/` — words CRUD, `import/` wizard, users, settings, logs.
 - Auth pages at root: `login`, `forgot/reset/set_password`, `verify_email`,
@@ -178,7 +207,7 @@ alongside any migration.
 - Local: create DB `vocab_lillyrosenthal`, load `www/schema.sql`, copy
   `config.local.php.example` → `config.local.php`, `php -S localhost:8080 -t www`.
 - Tests: `php unit-tests/tools/phpunit.phar -c unit-tests/phpunit.xml` —
-  103 unit tests over the lib classes (DI via `set_pdo_for_testing`; the
+  117 unit tests over the lib classes (DI via `set_pdo_for_testing`; the
   bootstrap drops/recreates `vocab_lillyrosenthal_test` from schema.sql).
   No endpoint or UI tests, per guidelines.
 - Production: Apache-style shared host, docroot at `www/`; `.htaccess` denies

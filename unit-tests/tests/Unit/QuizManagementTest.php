@@ -188,24 +188,24 @@ final class QuizManagementTest extends TestCase
 
     public function testGuessWordRoundUsesEveryWord(): void
     {
-        $round = QuizManagement::buildQuizRound(QuizManagement::MODE_GUESS_WORD);
+        $round = QuizManagement::buildQuizRound($this->userCtx->id, QuizManagement::MODE_GUESS_WORD);
         $this->assertCount(3, $round);
-        $this->assertSame(3, QuizManagement::countAvailableQuestions(QuizManagement::MODE_GUESS_WORD));
+        $this->assertSame(3, QuizManagement::countAvailableQuestions($this->userCtx->id, QuizManagement::MODE_GUESS_WORD));
     }
 
     public function testFillBlankRoundSkipsWordsWithoutAUsableSentence(): void
     {
-        $round = QuizManagement::buildQuizRound(QuizManagement::MODE_FILL_BLANK);
+        $round = QuizManagement::buildQuizRound($this->userCtx->id, QuizManagement::MODE_FILL_BLANK);
 
         $this->assertCount(2, $round);
-        $this->assertSame(2, QuizManagement::countAvailableQuestions(QuizManagement::MODE_FILL_BLANK));
+        $this->assertSame(2, QuizManagement::countAvailableQuestions($this->userCtx->id, QuizManagement::MODE_FILL_BLANK));
         $this->assertNotContains($this->wordIds['candor'], array_column($round, 'word_id'));
     }
 
     public function testQuestionsNeverLeakTheAnswer(): void
     {
         foreach ([QuizManagement::MODE_GUESS_WORD, QuizManagement::MODE_FILL_BLANK] as $mode) {
-            foreach (QuizManagement::buildQuizRound($mode) as $question) {
+            foreach (QuizManagement::buildQuizRound($this->userCtx->id, $mode) as $question) {
                 $word = (string)WordManagement::findById($question['word_id'])['word'];
                 $this->assertArrayNotHasKey('word', $question);
                 $this->assertStringNotContainsStringIgnoringCase($word, $question['prompt']);
@@ -216,7 +216,7 @@ final class QuizManagementTest extends TestCase
 
     public function testQuestionsCarryLetterHints(): void
     {
-        $round = QuizManagement::buildQuizRound(QuizManagement::MODE_GUESS_WORD);
+        $round = QuizManagement::buildQuizRound($this->userCtx->id, QuizManagement::MODE_GUESS_WORD);
         $byId = array_column($round, null, 'word_id');
 
         $this->assertSame(5, $byId[$this->wordIds['abate']]['letters']);
@@ -225,9 +225,9 @@ final class QuizManagementTest extends TestCase
 
     public function testRoundIsLimitedToTheRequestedCount(): void
     {
-        $this->assertCount(2, QuizManagement::buildQuizRound(QuizManagement::MODE_GUESS_WORD, [], 2));
+        $this->assertCount(2, QuizManagement::buildQuizRound($this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_ALL, 2));
         // A limit larger than the pool just returns the pool.
-        $this->assertCount(3, QuizManagement::buildQuizRound(QuizManagement::MODE_GUESS_WORD, [], 50));
+        $this->assertCount(3, QuizManagement::buildQuizRound($this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_ALL, 50));
     }
 
     public function testRoundCanBeDrawnFromSeveralDecksAtOnce(): void
@@ -238,17 +238,17 @@ final class QuizManagementTest extends TestCase
         $green = (int)$tags['Green']['id'];
         $whiteBlue = (int)$tags['White and Blue']['id'];
 
-        $greenOnly = QuizManagement::buildQuizRound(QuizManagement::MODE_GUESS_WORD, [$green]);
+        $greenOnly = QuizManagement::buildQuizRound($this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [$green]);
         $this->assertSame([$this->wordIds['abate']], array_column($greenOnly, 'word_id'));
 
-        $both = QuizManagement::buildQuizRound(QuizManagement::MODE_GUESS_WORD, [$green, $whiteBlue]);
+        $both = QuizManagement::buildQuizRound($this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [$green, $whiteBlue]);
         $this->assertEqualsCanonicalizing(
             [$this->wordIds['abate'], $this->wordIds['brusque']],
             array_column($both, 'word_id')
         );
 
         // No decks named = every word.
-        $this->assertCount(3, QuizManagement::buildQuizRound(QuizManagement::MODE_GUESS_WORD, []));
+        $this->assertCount(3, QuizManagement::buildQuizRound($this->userCtx->id, QuizManagement::MODE_GUESS_WORD, []));
     }
 
     public function testWordTaggedTwiceIsOnlyAskedOnce(): void
@@ -257,6 +257,7 @@ final class QuizManagementTest extends TestCase
         $tags = array_column(WordManagement::listAllTags(), null, 'name');
 
         $round = QuizManagement::buildQuizRound(
+            $this->userCtx->id,
             QuizManagement::MODE_GUESS_WORD,
             [(int)$tags['Green']['id'], (int)$tags['White and Blue']['id']]
         );
@@ -266,7 +267,176 @@ final class QuizManagementTest extends TestCase
     public function testBuildRoundRejectsUnknownMode(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        QuizManagement::buildQuizRound('spelling_bee');
+        QuizManagement::buildQuizRound($this->userCtx->id, 'spelling_bee');
+    }
+
+    // --- least-recently-practiced ordering ---
+
+    /** Push a word's quiz history into the past so ordering is testable
+     *  (DATETIME only resolves to the second, and a test answers far faster). */
+    private function backdateAttemptsFor(int $wordId, int $daysAgo): void
+    {
+        $st = pdo()->prepare('UPDATE quiz_attempts SET created_at = DATE_SUB(NOW(), INTERVAL ? DAY) WHERE word_id = ?');
+        $st->execute([$daysAgo, $wordId]);
+    }
+
+    public function testASecondRoundMovesOnToWordsTheFirstDidNotAsk(): void
+    {
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'abate');
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['brusque'], QuizManagement::MODE_GUESS_WORD, 'brusque');
+
+        // Only "candor" has never been quizzed, so it leads regardless of shuffling.
+        $round = QuizManagement::buildQuizRound(
+            $this->userCtx->id,
+            QuizManagement::MODE_GUESS_WORD,
+            [],
+            QuizManagement::SOURCE_ALL,
+            1
+        );
+        $this->assertSame([$this->wordIds['candor']], array_column($round, 'word_id'));
+    }
+
+    public function testOncePractisedEverythingComesBackRoundOldestFirst(): void
+    {
+        foreach (['abate', 'brusque', 'candor'] as $word) {
+            QuizManagement::recordAnswer($this->userCtx, $this->wordIds[$word], QuizManagement::MODE_GUESS_WORD, $word);
+        }
+        $this->backdateAttemptsFor($this->wordIds['brusque'], 9);
+        $this->backdateAttemptsFor($this->wordIds['abate'], 3);
+
+        $round = QuizManagement::buildQuizRound(
+            $this->userCtx->id,
+            QuizManagement::MODE_GUESS_WORD,
+            [],
+            QuizManagement::SOURCE_ALL,
+            2
+        );
+        $this->assertEqualsCanonicalizing(
+            [$this->wordIds['brusque'], $this->wordIds['abate']],
+            array_column($round, 'word_id'),
+            'The two longest-untouched words should come back first'
+        );
+    }
+
+    public function testAnotherUsersPracticeDoesNotReorderMyRound(): void
+    {
+        // The admin grinds one word; it must still be new territory for me.
+        QuizManagement::recordAnswer($this->adminCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'abate');
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['brusque'], QuizManagement::MODE_GUESS_WORD, 'brusque');
+
+        $round = QuizManagement::buildQuizRound(
+            $this->userCtx->id,
+            QuizManagement::MODE_GUESS_WORD,
+            [],
+            QuizManagement::SOURCE_ALL,
+            2
+        );
+        $this->assertEqualsCanonicalizing(
+            [$this->wordIds['abate'], $this->wordIds['candor']],
+            array_column($round, 'word_id')
+        );
+    }
+
+    // --- word pools: misses and flagged ---
+
+    public function testMissesPoolSpansFlashcardsAndQuizzes(): void
+    {
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds['abate'], FlashcardProgress::MARK_NEEDS_REVIEW);
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['brusque'], QuizManagement::MODE_GUESS_WORD, 'nope');
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['candor'], QuizManagement::MODE_GUESS_WORD, 'candor');
+
+        $round = QuizManagement::buildQuizRound(
+            $this->userCtx->id,
+            QuizManagement::MODE_GUESS_WORD,
+            [],
+            QuizManagement::SOURCE_MISSES
+        );
+        $this->assertEqualsCanonicalizing(
+            [$this->wordIds['abate'], $this->wordIds['brusque']],
+            array_column($round, 'word_id')
+        );
+    }
+
+    public function testAWordLeavesTheMissesPoolOnceItIsAnsweredRight(): void
+    {
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'nope');
+        $this->assertSame(1, QuizManagement::countAvailableQuestions(
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES
+        ));
+
+        $this->backdateAttemptsFor($this->wordIds['abate'], 2);
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'abate');
+
+        $this->assertSame(0, QuizManagement::countAvailableQuestions(
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES
+        ));
+    }
+
+    public function testClaimingAnAnswerAlsoClearsItFromTheMissesPool(): void
+    {
+        $outcome = QuizManagement::recordAnswer(
+            $this->userCtx,
+            $this->wordIds['abate'],
+            QuizManagement::MODE_GUESS_WORD,
+            'subside'
+        );
+        QuizManagement::markAttemptCorrectAnyway($this->userCtx, $outcome['attempt_id']);
+
+        $this->assertSame(0, QuizManagement::countAvailableQuestions(
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES
+        ));
+    }
+
+    public function testFlaggedPoolHoldsOnlyFlaggedWordsAndIsPerUser(): void
+    {
+        FlashcardProgress::setWordFlag($this->userCtx, $this->wordIds['candor'], true);
+
+        $round = QuizManagement::buildQuizRound(
+            $this->userCtx->id,
+            QuizManagement::MODE_GUESS_WORD,
+            [],
+            QuizManagement::SOURCE_FLAGGED
+        );
+        $this->assertSame([$this->wordIds['candor']], array_column($round, 'word_id'));
+
+        // Flags are personal, so the admin's flagged pool is still empty.
+        $this->assertSame(0, QuizManagement::countAvailableQuestions(
+            $this->adminCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_FLAGGED
+        ));
+
+        // Unflagging empties it again.
+        FlashcardProgress::setWordFlag($this->userCtx, $this->wordIds['candor'], false);
+        $this->assertSame(0, QuizManagement::countAvailableQuestions(
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_FLAGGED
+        ));
+    }
+
+    public function testPoolsCombineWithDeckAndModeFilters(): void
+    {
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds['abate'], ['Green']);
+        $tags = array_column(WordManagement::listAllTags(), null, 'name');
+        $greenId = (int)$tags['Green']['id'];
+
+        FlashcardProgress::setWordFlag($this->userCtx, $this->wordIds['abate'], true);
+        FlashcardProgress::setWordFlag($this->userCtx, $this->wordIds['candor'], true);
+
+        // Flagged ∩ Green = abate only.
+        $green = QuizManagement::buildQuizRound(
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [$greenId], QuizManagement::SOURCE_FLAGGED
+        );
+        $this->assertSame([$this->wordIds['abate']], array_column($green, 'word_id'));
+
+        // Flagged ∩ Fill in the Blank drops candor, which has no sentence.
+        $fillable = QuizManagement::buildQuizRound(
+            $this->userCtx->id, QuizManagement::MODE_FILL_BLANK, [], QuizManagement::SOURCE_FLAGGED
+        );
+        $this->assertSame([$this->wordIds['abate']], array_column($fillable, 'word_id'));
+    }
+
+    public function testBuildRoundRejectsUnknownSource(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        QuizManagement::buildQuizRound($this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], 'hard_ones');
     }
 
     // --- recording answers ---
@@ -391,6 +561,69 @@ final class QuizManagementTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         QuizManagement::markAttemptCorrectAnyway($this->adminCtx, $outcome['attempt_id']);
+    }
+
+    // --- most-missed words ---
+
+    public function testMostMissedWordsCombineFlashcardAndQuizMisses(): void
+    {
+        // abate: missed twice on flashcards and once in a quiz; brusque: one
+        // quiz miss; candor: answered right, so it never appears.
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds['abate'], FlashcardProgress::MARK_NEEDS_REVIEW);
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds['abate'], FlashcardProgress::MARK_NEEDS_REVIEW);
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'nope');
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['brusque'], QuizManagement::MODE_GUESS_WORD, 'nope');
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['candor'], QuizManagement::MODE_GUESS_WORD, 'candor');
+
+        $missed = QuizManagement::getMostMissedWordsForUser($this->userCtx->id);
+
+        $this->assertSame(['abate', 'brusque'], array_column($missed, 'word'));
+        $this->assertSame(2, $missed[0]['flashcard_misses']);
+        $this->assertSame(1, $missed[0]['quiz_misses']);
+        $this->assertSame(3, $missed[0]['total_misses']);
+        $this->assertSame(1, $missed[1]['total_misses']);
+    }
+
+    public function testMostMissedCountsSurviveLaterSuccesses(): void
+    {
+        // A miss stays counted even after the word is later gotten right —
+        // the list ranks all-time trouble spots, not current state.
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds['abate'], FlashcardProgress::MARK_NEEDS_REVIEW);
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds['abate'], FlashcardProgress::MARK_GOT_IT);
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'abate');
+
+        $missed = QuizManagement::getMostMissedWordsForUser($this->userCtx->id);
+
+        $this->assertSame(['abate'], array_column($missed, 'word'));
+        $this->assertSame(1, $missed[0]['flashcard_misses']);
+        $this->assertSame(0, $missed[0]['quiz_misses']);
+    }
+
+    public function testAClaimedAnswerIsNotAMiss(): void
+    {
+        $outcome = QuizManagement::recordAnswer(
+            $this->userCtx,
+            $this->wordIds['abate'],
+            QuizManagement::MODE_GUESS_WORD,
+            'subside'
+        );
+        $this->assertSame(['abate'], array_column(QuizManagement::getMostMissedWordsForUser($this->userCtx->id), 'word'));
+
+        QuizManagement::markAttemptCorrectAnyway($this->userCtx, $outcome['attempt_id']);
+
+        $this->assertSame([], QuizManagement::getMostMissedWordsForUser($this->userCtx->id));
+    }
+
+    public function testMostMissedWordsArePerUserAndLimited(): void
+    {
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'nope');
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'nope');
+        QuizManagement::recordAnswer($this->userCtx, $this->wordIds['brusque'], QuizManagement::MODE_GUESS_WORD, 'nope');
+        QuizManagement::recordAnswer($this->adminCtx, $this->wordIds['candor'], QuizManagement::MODE_GUESS_WORD, 'nope');
+
+        $missed = QuizManagement::getMostMissedWordsForUser($this->userCtx->id, 1);
+
+        $this->assertSame(['abate'], array_column($missed, 'word'));
     }
 
     // --- stats ---

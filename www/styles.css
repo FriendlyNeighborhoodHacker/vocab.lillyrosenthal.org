@@ -798,6 +798,29 @@ pre.import-example {
 .quiz-hint-letters { font-weight: 800; color: #A9760A; }
 .quiz-hint-extra { font-family: var(--font-quiz); font-size: 0.98rem; margin-top: 4px; color: var(--color-ink-muted); }
 
+.quiz-choices-btn { margin-top: 12px; }
+.quiz-choices {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.quiz-choice-chip {
+  font-family: var(--font-quiz);
+  font-size: 0.95rem;
+  padding: 6px 12px;
+  border: 2px solid var(--color-border);
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.quiz-choice-chip:hover, .quiz-choice-chip:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
 .quiz-answer-form { display: flex; gap: 10px; justify-content: center; margin-top: 22px; flex-wrap: wrap; }
 .quiz-input {
   flex: 1 1 260px;

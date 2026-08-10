@@ -201,4 +201,25 @@ final class WordManagementTest extends TestCase
         $this->assertSame(2, WordManagement::countWords());
         $this->assertSame(3, WordManagement::nextSortOrder());
     }
+
+    public function testListWordTextsIsAlphabeticalAndFollowsDecks(): void
+    {
+        // Deck order differs from alphabetical order on purpose.
+        $verdant = WordManagement::addWord($this->adminCtx, 'verdant', 'green with vegetation');
+        $abate = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen');
+        $brusque = WordManagement::addWord($this->adminCtx, 'brusque', 'abrupt in manner');
+        WordManagement::setWordTags($this->adminCtx, $verdant, ['Green']);
+        WordManagement::setWordTags($this->adminCtx, $abate, ['Green', 'White and Blue']);
+        WordManagement::setWordTags($this->adminCtx, $brusque, ['White and Blue']);
+
+        $this->assertSame(['abate', 'brusque', 'verdant'], WordManagement::listWordTexts());
+
+        $byName = array_column(WordManagement::listAllTags(), null, 'name');
+        $greenId = (int)$byName['Green']['id'];
+        $whiteBlueId = (int)$byName['White and Blue']['id'];
+
+        $this->assertSame(['abate', 'verdant'], WordManagement::listWordTexts([$greenId]));
+        // The union of two decks, with the word tagged in both appearing once.
+        $this->assertSame(['abate', 'brusque', 'verdant'], WordManagement::listWordTexts([$greenId, $whiteBlueId]));
+    }
 }

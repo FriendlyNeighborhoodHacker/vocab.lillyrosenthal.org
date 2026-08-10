@@ -105,6 +105,8 @@ header_html(QuizManagement::modeLabel($mode));
 
       <button type="button" class="button small quiz-hint-btn" id="quiz-hint-btn">Need a hint?</button>
       <div class="quiz-hint hidden" id="quiz-hint"></div>
+      <button type="button" class="button small quiz-choices-btn hidden" id="quiz-choices-btn"></button>
+      <div class="quiz-choices hidden" id="quiz-choices"></div>
 
       <form class="quiz-answer-form" id="quiz-form" autocomplete="off">
         <input type="text" id="quiz-input" class="quiz-input" placeholder="type the word&hellip;"
@@ -148,7 +150,13 @@ header_html(QuizManagement::modeLabel($mode));
 
   <script>
     const QUESTIONS = <?= json_encode($questions, JSON_UNESCAPED_UNICODE) ?>;
+    // Every word in the chosen decks (texts only, nothing marking the answer),
+    // for the "show words starting with…" second hint.
+    const WORD_LIST = <?= json_encode(WordManagement::listWordTexts($tagIds), JSON_UNESCAPED_UNICODE) ?>;
     const QUIZ_MODE = <?= json_encode($mode) ?>;
+    // Identifies this round's settings, so a saved in-progress round is only
+    // resumed into the round it belongs to.
+    const ROUND_SETTINGS = <?= json_encode($settingsQuery) ?>;
     const CSRF = <?= json_encode(csrf_token()) ?>;
   </script>
   <?= ApplicationUI::jsScript('/quiz/quiz.js') ?>
