@@ -62,14 +62,15 @@ header_html('Flashcards');
     <?php endforeach; ?>
   </nav>
   <?php if (!empty($allTags)): ?>
+    <?php $learned = FlashcardProgress::learnedWordCounts($userId); ?>
     <form method="get" action="/review/" class="deck-picker">
       <input type="hidden" name="deck" value="<?=h($deckFilter)?>">
       <label class="small">Deck
         <select name="tag" onchange="this.form.submit()">
-          <option value="">All decks</option>
+          <option value="">All decks (<?= (int)$learned['total'] ?>/<?= WordManagement::countWords() ?> learned)</option>
           <?php foreach ($allTags as $tag): ?>
             <option value="<?= (int)$tag['id'] ?>" <?= $tagId === (int)$tag['id'] ? 'selected' : '' ?>>
-              <?=h($tag['name'])?> (<?= (int)$tag['word_count'] ?>)
+              <?=h($tag['name'])?> (<?= (int)($learned['by_tag'][(int)$tag['id']] ?? 0) ?>/<?= (int)$tag['word_count'] ?> learned)
             </option>
           <?php endforeach; ?>
         </select>

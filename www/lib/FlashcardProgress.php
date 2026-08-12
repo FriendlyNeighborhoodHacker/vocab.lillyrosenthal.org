@@ -232,6 +232,33 @@ class FlashcardProgress {
         ];
     }
 
+    // The deck picker's "learned" counts: a word counts as learned once it
+    // has ever been marked Got it (got_it_count > 0), even if it was missed
+    // later. Returns ['total' => int, 'by_tag' => [tag_id => int]]; tags with
+    // no learned words are absent from by_tag.
+    public static function learnedWordCounts(int $userId): array {
+        $pdo = self::pdo();
+
+        $st = $pdo->prepare('SELECT COUNT(*) AS c FROM user_word_state WHERE user_id = ? AND got_it_count > 0');
+        $st->execute([$userId]);
+        $total = (int)$st->fetch()['c'];
+
+        $st = $pdo->prepare(
+            'SELECT wt.tag_id, COUNT(*) AS c
+             FROM user_word_state s
+             INNER JOIN word_tags wt ON wt.word_id = s.word_id
+             WHERE s.user_id = ? AND s.got_it_count > 0
+             GROUP BY wt.tag_id'
+        );
+        $st->execute([$userId]);
+        $byTag = [];
+        foreach ($st->fetchAll() as $row) {
+            $byTag[(int)$row['tag_id']] = (int)$row['c'];
+        }
+
+        return ['total' => $total, 'by_tag' => $byTag];
+    }
+
     // The JOIN + params that restrict a per-word table (aliased x) to one
     // deck's words; no-ops when $tagId is null.
     private static function tagScope(?int $tagId): array {

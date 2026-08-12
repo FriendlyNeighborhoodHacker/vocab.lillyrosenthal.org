@@ -267,6 +267,28 @@ final class FlashcardProgressTest extends TestCase
         $this->assertSame(2, end($stats['daily_reviews'])['count']); // today is the last bucket
     }
 
+    public function testLearnedWordCounts(): void
+    {
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[0], ['Green']);
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds[1], ['Green']);
+        $tags = array_column(WordManagement::listAllTags(), null, 'name');
+        $greenId = (int)$tags['Green']['id'];
+
+        // abate: got it then missed — still learned. brusque: only missed,
+        // never learned. candor: learned but outside the Green deck.
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds[0], FlashcardProgress::MARK_GOT_IT);
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds[0], FlashcardProgress::MARK_NEEDS_REVIEW);
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds[1], FlashcardProgress::MARK_NEEDS_REVIEW);
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds[2], FlashcardProgress::MARK_GOT_IT);
+
+        $counts = FlashcardProgress::learnedWordCounts($this->userCtx->id);
+        $this->assertSame(2, $counts['total']);
+        $this->assertSame([$greenId => 1], $counts['by_tag']);
+
+        // Other users only see their own progress.
+        $this->assertSame(['total' => 0, 'by_tag' => []], FlashcardProgress::learnedWordCounts($this->adminCtx->id));
+    }
+
     public function testStatsScopedToOneDeck(): void
     {
         // Green holds abate + brusque; candor stays outside the deck.
