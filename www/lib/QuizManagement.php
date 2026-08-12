@@ -118,6 +118,29 @@ class QuizManagement {
         return count(self::availableQuestions($userId, $mode, $tagIds, $source));
     }
 
+    /**
+     * The launcher's counts for one mode + pool in a single pass:
+     * ['total' => how many questions the whole pool holds,
+     *  'by_tag' => [tag_id => how many of them sit in that deck]].
+     * A word in two decks counts in both; decks with nothing askable are
+     * absent from by_tag.
+     */
+    public static function availableQuestionSummary(int $userId, string $mode, string $source = self::SOURCE_ALL): array {
+        $wordIds = array_column(self::availableQuestions($userId, $mode, [], $source), 'word_id');
+        $byTag = [];
+        if ($wordIds) {
+            $placeholders = implode(',', array_fill(0, count($wordIds), '?'));
+            $st = self::pdo()->prepare(
+                "SELECT tag_id, COUNT(*) AS c FROM word_tags WHERE word_id IN ({$placeholders}) GROUP BY tag_id"
+            );
+            $st->execute($wordIds);
+            foreach ($st->fetchAll() as $row) {
+                $byTag[(int)$row['tag_id']] = (int)$row['c'];
+            }
+        }
+        return ['total' => count($wordIds), 'by_tag' => $byTag];
+    }
+
     // Every askable question in the pool, already in least-recently-practiced
     // order.
     private static function availableQuestions(int $userId, string $mode, array $tagIds, string $source): array {

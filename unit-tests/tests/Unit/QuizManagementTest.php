@@ -452,6 +452,35 @@ final class QuizManagementTest extends TestCase
         $this->assertSame([$this->wordIds['abate']], array_column($fillable, 'word_id'));
     }
 
+    public function testAvailableQuestionSummaryCountsPerDeck(): void
+    {
+        // Green holds abate + candor; Blue holds brusque. Only abate is a miss.
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds['abate'], ['Green']);
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds['candor'], ['Green']);
+        WordManagement::setWordTags($this->adminCtx, $this->wordIds['brusque'], ['Blue']);
+        $tags = array_column(WordManagement::listAllTags(), null, 'name');
+        $greenId = (int)$tags['Green']['id'];
+        $blueId = (int)$tags['Blue']['id'];
+
+        FlashcardProgress::markWord($this->userCtx, $this->wordIds['abate'], FlashcardProgress::MARK_NEEDS_REVIEW);
+
+        $all = QuizManagement::availableQuestionSummary($this->userCtx->id, QuizManagement::MODE_GUESS_WORD);
+        $this->assertSame(3, $all['total']);
+        $this->assertEquals([$greenId => 2, $blueId => 1], $all['by_tag']);
+
+        // The combined pool only holds abate, so Blue drops out entirely.
+        $pool = QuizManagement::availableQuestionSummary(
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, QuizManagement::SOURCE_MISSES_FLAGGED
+        );
+        $this->assertSame(1, $pool['total']);
+        $this->assertEquals([$greenId => 1], $pool['by_tag']);
+
+        // Fill in the Blank drops candor, which has no example sentence.
+        $fillable = QuizManagement::availableQuestionSummary($this->userCtx->id, QuizManagement::MODE_FILL_BLANK);
+        $this->assertSame(2, $fillable['total']);
+        $this->assertEquals([$greenId => 1, $blueId => 1], $fillable['by_tag']);
+    }
+
     public function testBuildRoundRejectsUnknownSource(): void
     {
         $this->expectException(InvalidArgumentException::class);

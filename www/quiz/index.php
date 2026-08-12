@@ -13,16 +13,18 @@ $allTags = WordManagement::listAllTags();
 
 $userId = (int)$me['id'];
 
-// How many questions each mode and word pool can produce. Counted across every
-// deck: narrowing to particular decks only ever shrinks these, and play.php
-// says so plainly if a round comes back empty. Both modes are counted so the
-// numbers can follow the mode the user picks without a round trip — Fill in the
-// Blank has a smaller pool, since it needs an example sentence using the word.
+// How many questions each mode and word pool can produce — overall and per
+// deck, so every number on the page can follow the game and pool the user
+// picks without a round trip. Fill in the Blank has a smaller pool, since it
+// needs an example sentence using the word.
 $readyByMode = [];
 $readyBySource = [];
+$deckCounts = [];
 foreach ([QuizManagement::MODE_GUESS_WORD, QuizManagement::MODE_FILL_BLANK] as $mode) {
     foreach ([QuizManagement::SOURCE_ALL, QuizManagement::SOURCE_MISSES_FLAGGED] as $source) {
-        $readyBySource[$mode][$source] = QuizManagement::countAvailableQuestions($userId, $mode, [], $source);
+        $summary = QuizManagement::availableQuestionSummary($userId, $mode, $source);
+        $readyBySource[$mode][$source] = $summary['total'];
+        $deckCounts[$mode][$source] = (object)$summary['by_tag'];
     }
     $readyByMode[$mode] = $readyBySource[$mode][QuizManagement::SOURCE_ALL];
 }
@@ -135,7 +137,8 @@ header_html('Quiz');
           <label class="quiz-deck-pick">
             <input type="checkbox" name="tags[]" value="<?= (int)$tag['id'] ?>"
                    <?= in_array((int)$tag['id'], $selectedTagIds, true) ? 'checked' : '' ?>>
-            <span><?=h($tag['name'])?> <span class="small">(<?= (int)$tag['word_count'] ?>)</span></span>
+            <span><?=h($tag['name'])?> <span class="small">(<span class="quiz-deck-count"
+              data-tag-id="<?= (int)$tag['id'] ?>"><?= (int)($deckCounts[$selectedMode][$selectedSource]->{(int)$tag['id']} ?? 0) ?></span>)</span></span>
           </label>
         <?php endforeach; ?>
       </div>
@@ -163,6 +166,9 @@ header_html('Quiz');
   // How many questions each mode/pool pair has, so the counts beside "Which
   // words?" follow the game the user picks.
   const READY_BY_SOURCE = <?= json_encode($readyBySource) ?>;
+  // The same, split out per deck ({mode: {source: {tagId: count}}}), so the
+  // "Which decks?" numbers follow the mode and pool too.
+  const DECK_COUNTS = <?= json_encode($deckCounts) ?>;
 </script>
 <?= ApplicationUI::jsScript('/quiz/quiz_setup.js') ?>
 

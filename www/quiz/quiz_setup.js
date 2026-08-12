@@ -1,6 +1,7 @@
-// Quiz launcher: keep the "Which words?" counts pointing at the game currently
-// selected, and don't let anyone start a round that has nothing to ask.
-// READY_BY_SOURCE is embedded by index.php as {mode: {source: count}}.
+// Quiz launcher: keep the "Which words?" and "Which decks?" counts pointing at
+// the game and pool currently selected, and don't let anyone start a round
+// that has nothing to ask. READY_BY_SOURCE is embedded by index.php as
+// {mode: {source: count}}, DECK_COUNTS as {mode: {source: {tagId: count}}}.
 (function () {
   'use strict';
 
@@ -10,7 +11,9 @@
   if (!form) return;
 
   var modeInputs = form.querySelectorAll('input[name="mode"]');
+  var sourceInputs = form.querySelectorAll('input[name="source"]');
   var sourcePicks = form.querySelectorAll('.quiz-source-pick');
+  var deckCountEls = form.querySelectorAll('.quiz-deck-count');
   var startBtn = form.querySelector('.quiz-start');
 
   function selectedMode() {
@@ -18,6 +21,21 @@
       if (modeInputs[i].checked) return modeInputs[i].value;
     }
     return null;
+  }
+
+  function selectedSource() {
+    var checked = form.querySelector('input[name="source"]:checked');
+    return checked ? checked.value : null;
+  }
+
+  function refreshDeckCounts() {
+    if (typeof DECK_COUNTS === 'undefined') return;
+    var counts = (DECK_COUNTS[selectedMode()] || {})[selectedSource()] || {};
+
+    deckCountEls.forEach(function (el) {
+      var count = counts[el.dataset.tagId];
+      el.textContent = count === undefined ? 0 : count;
+    });
   }
 
   function refreshCounts() {
@@ -42,10 +60,15 @@
 
     var anything = form.querySelector('input[name="source"]:checked');
     startBtn.classList.toggle('disabled', !anything);
+
+    refreshDeckCounts();
   }
 
   modeInputs.forEach(function (input) {
     input.addEventListener('change', refreshCounts);
+  });
+  sourceInputs.forEach(function (input) {
+    input.addEventListener('change', refreshDeckCounts);
   });
 
   refreshCounts();
