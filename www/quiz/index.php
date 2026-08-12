@@ -14,19 +14,20 @@ $allTags = WordManagement::listAllTags();
 $userId = (int)$me['id'];
 
 // How many questions each mode and word pool can produce — overall and per
-// deck, so every number on the page can follow the game and pool the user
-// picks without a round trip. Fill in the Blank has a smaller pool, since it
-// needs an example sentence using the word.
+// deck, so every number on the page can follow the deck, game, and pool the
+// user picks without a round trip. Fill in the Blank has a smaller pool,
+// since it needs an example sentence using the word.
 $readyByMode = [];
-$readyBySource = [];
-$deckCounts = [];
+$poolCounts = [];
 foreach ([QuizManagement::MODE_GUESS_WORD, QuizManagement::MODE_FILL_BLANK] as $mode) {
     foreach ([QuizManagement::SOURCE_ALL, QuizManagement::SOURCE_MISSES_FLAGGED] as $source) {
         $summary = QuizManagement::availableQuestionSummary($userId, $mode, $source);
-        $readyBySource[$mode][$source] = $summary['total'];
-        $deckCounts[$mode][$source] = (object)$summary['by_tag'];
+        $poolCounts[$mode][$source] = [
+            'total' => $summary['total'],
+            'by_tag' => (object)$summary['by_tag'],   // objects so {} survives json_encode when empty
+        ];
     }
-    $readyByMode[$mode] = $readyBySource[$mode][QuizManagement::SOURCE_ALL];
+    $readyByMode[$mode] = $poolCounts[$mode][QuizManagement::SOURCE_ALL]['total'];
 }
 
 // Pre-select whatever the user played last time (play.php links back here with
@@ -39,8 +40,20 @@ $selectedSource = QuizManagement::normalizeSource((string)($_GET['source'] ?? Qu
 if (!QuizManagement::isValidSource($selectedSource)) {
     $selectedSource = QuizManagement::SOURCE_ALL;
 }
-$selectedTagIds = array_map('intval', (array)($_GET['tags'] ?? []));
+// The deck picker is a single choice; the first tag carried back from an old
+// multi-deck round (or a "change settings" link) pre-selects it.
+$selectedTagId = null;
+foreach (array_map('intval', (array)($_GET['tags'] ?? [])) as $id) {
+    if ($id > 0) { $selectedTagId = $id; break; }
+}
 $selectedCount = (int)($_GET['count'] ?? 20);
+
+// The number to show beside a game or word pool, honouring the chosen deck.
+$countFor = function (string $mode, string $source) use ($poolCounts, $selectedTagId): int {
+    $entry = $poolCounts[$mode][$source];
+    if ($selectedTagId === null) return $entry['total'];
+    return (int)($entry['by_tag']->{$selectedTagId} ?? 0);
+};
 
 $sourceCards = [
     QuizManagement::SOURCE_ALL => [
@@ -93,6 +106,22 @@ header_html('Quiz');
 <?php else: ?>
 
 <form method="get" action="/quiz/play.php" class="quiz-setup card">
+  <?php if (!empty($allTags)): ?>
+    <fieldset class="quiz-fieldset">
+      <legend>Which deck?</legend>
+      <label class="quiz-count">
+        <select name="tags[]">
+          <option value="">All decks</option>
+          <?php foreach ($allTags as $tag): ?>
+            <option value="<?= (int)$tag['id'] ?>" <?= $selectedTagId === (int)$tag['id'] ? 'selected' : '' ?>>
+              <?=h($tag['name'])?> (<?= (int)$tag['word_count'] ?>)
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+    </fieldset>
+  <?php endif; ?>
+
   <fieldset class="quiz-fieldset">
     <legend>Pick your game</legend>
     <div class="quiz-mode-cards">
@@ -102,7 +131,7 @@ header_html('Quiz');
           <span class="quiz-mode-emoji" aria-hidden="true"><?= $card['emoji'] ?></span>
           <span class="quiz-mode-name"><?=h(QuizManagement::modeLabel($mode))?></span>
           <span class="quiz-mode-blurb small"><?=h($card['blurb'])?></span>
-          <span class="quiz-mode-ready small"><?= number_format($readyByMode[$mode]) ?> words ready</span>
+          <span class="quiz-mode-ready small" data-mode-ready="<?=h($mode)?>"><?= number_format($countFor($mode, QuizManagement::SOURCE_ALL)) ?> words ready</span>
         </label>
       <?php endforeach; ?>
     </div>
@@ -119,7 +148,7 @@ header_html('Quiz');
           <input type="radio" name="source" value="<?=h($source)?>" <?= $selectedSource === $source ? 'checked' : '' ?>>
           <span class="quiz-source-body">
             <span class="quiz-source-name"><?=h($card['name'])?>
-              <span class="quiz-source-count"><?= number_format($readyBySource[$selectedMode][$source]) ?></span>
+              <span class="quiz-source-count"><?= number_format($countFor($selectedMode, $source)) ?></span>
             </span>
             <span class="quiz-source-blurb small"><?=h($card['blurb'])?></span>
           </span>
@@ -127,23 +156,6 @@ header_html('Quiz');
       <?php endforeach; ?>
     </div>
   </fieldset>
-
-  <?php if (!empty($allTags)): ?>
-    <fieldset class="quiz-fieldset">
-      <legend>Which decks?</legend>
-      <p class="small">Tick as many as you like — leave them all unticked to quiz on every word.</p>
-      <div class="quiz-deck-picks">
-        <?php foreach ($allTags as $tag): ?>
-          <label class="quiz-deck-pick">
-            <input type="checkbox" name="tags[]" value="<?= (int)$tag['id'] ?>"
-                   <?= in_array((int)$tag['id'], $selectedTagIds, true) ? 'checked' : '' ?>>
-            <span><?=h($tag['name'])?> <span class="small">(<span class="quiz-deck-count"
-              data-tag-id="<?= (int)$tag['id'] ?>"><?= (int)($deckCounts[$selectedMode][$selectedSource]->{(int)$tag['id']} ?? 0) ?></span>)</span></span>
-          </label>
-        <?php endforeach; ?>
-      </div>
-    </fieldset>
-  <?php endif; ?>
 
   <fieldset class="quiz-fieldset">
     <legend>How many questions?</legend>
@@ -163,12 +175,10 @@ header_html('Quiz');
 </form>
 
 <script>
-  // How many questions each mode/pool pair has, so the counts beside "Which
-  // words?" follow the game the user picks.
-  const READY_BY_SOURCE = <?= json_encode($readyBySource) ?>;
-  // The same, split out per deck ({mode: {source: {tagId: count}}}), so the
-  // "Which decks?" numbers follow the mode and pool too.
-  const DECK_COUNTS = <?= json_encode($deckCounts) ?>;
+  // How many questions each mode/pool pair has, overall and per deck
+  // ({mode: {source: {total, by_tag: {tagId: count}}}}), so every count on
+  // the page follows the deck and game the user picks.
+  const POOL_COUNTS = <?= json_encode($poolCounts) ?>;
 </script>
 <?= ApplicationUI::jsScript('/quiz/quiz_setup.js') ?>
 
