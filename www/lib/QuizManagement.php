@@ -28,13 +28,12 @@ class QuizManagement {
     public const RESULT_SYNONYM = 'synonym';     // a synonym we list for the word
     public const RESULT_INCORRECT = 'incorrect';
 
-    // Which words a round draws from. SOURCE_MISSES deliberately spans both
-    // halves of the app — a word you fumbled on a flashcard and a word you
-    // mistyped in a quiz are the same kind of weak spot — so its count won't
-    // match the flashcards' "Misses" tab exactly.
+    // Which words a round draws from. SOURCE_MISSES_FLAGGED is the union of
+    // every kind of weak spot: words missed on a flashcard, words mistyped in
+    // a quiz and not got right since, and words the user flagged — so its
+    // count won't match the flashcards' "Misses" tab exactly.
     public const SOURCE_ALL = 'all';
-    public const SOURCE_MISSES = 'misses';
-    public const SOURCE_FLAGGED = 'flagged';
+    public const SOURCE_MISSES_FLAGGED = 'misses_flagged';
 
     public const POINTS_CORRECT = 10;
     public const POINTS_CLOSE = 8;
@@ -69,7 +68,13 @@ class QuizManagement {
     }
 
     public static function isValidSource(string $source): bool {
-        return in_array($source, [self::SOURCE_ALL, self::SOURCE_MISSES, self::SOURCE_FLAGGED], true);
+        return in_array($source, [self::SOURCE_ALL, self::SOURCE_MISSES_FLAGGED], true);
+    }
+
+    // Old links and bookmarks used separate 'misses' and 'flagged' pools;
+    // both now land on the combined pool.
+    public static function normalizeSource(string $source): string {
+        return in_array($source, ['misses', 'flagged'], true) ? self::SOURCE_MISSES_FLAGGED : $source;
     }
 
     private static function assertValidSource(string $source): void {
@@ -173,11 +178,11 @@ class QuizManagement {
             $sql .= " AND w.sentences IS NOT NULL AND w.sentences <> ''";
         }
 
-        if ($source === self::SOURCE_FLAGGED) {
-            $sql .= ' AND s.is_flagged = 1';
-        } elseif ($source === self::SOURCE_MISSES) {
-            // Missed on a flashcard, or missed in a quiz and not since gotten right.
-            $sql .= " AND (s.last_mark = 'needs_review'
+        if ($source === self::SOURCE_MISSES_FLAGGED) {
+            // Flagged, missed on a flashcard, or missed in a quiz and not
+            // since gotten right.
+            $sql .= " AND (s.is_flagged = 1
+                           OR s.last_mark = 'needs_review'
                            OR (qa.last_wrong IS NOT NULL
                                AND (qa.last_right IS NULL OR qa.last_wrong > qa.last_right)))";
         }

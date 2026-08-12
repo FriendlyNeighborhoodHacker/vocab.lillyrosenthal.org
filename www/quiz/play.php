@@ -15,7 +15,7 @@ if (!QuizManagement::isValidMode($mode)) {
     $mode = QuizManagement::MODE_GUESS_WORD;
 }
 
-$source = (string)($_GET['source'] ?? QuizManagement::SOURCE_ALL);
+$source = QuizManagement::normalizeSource((string)($_GET['source'] ?? QuizManagement::SOURCE_ALL));
 if (!QuizManagement::isValidSource($source)) {
     $source = QuizManagement::SOURCE_ALL;
 }
@@ -43,8 +43,7 @@ $settingsQuery = http_build_query(['mode' => $mode, 'source' => $source, 'tags' 
 
 $deckLabel = $selectedTags ? implode(', ', $selectedTags) : 'All words';
 $sourceLabels = [
-    QuizManagement::SOURCE_MISSES => 'Words I miss',
-    QuizManagement::SOURCE_FLAGGED => 'Flagged words',
+    QuizManagement::SOURCE_MISSES_FLAGGED => 'Words I missed and flagged words',
 ];
 
 header_html(QuizManagement::modeLabel($mode));
@@ -64,12 +63,9 @@ header_html(QuizManagement::modeLabel($mode));
 <?php if (empty($questions)): ?>
   <?php $inTheseDecks = $selectedTags ? ' in the decks you picked' : ''; ?>
   <div class="card empty-deck">
-    <?php if ($source === QuizManagement::SOURCE_MISSES): ?>
-      <h2>Nothing missed<?=h($inTheseDecks)?> &#127881;</h2>
-      <p>There's nothing you've missed on a flashcard or in a quiz right now. That's the good kind of empty.</p>
-    <?php elseif ($source === QuizManagement::SOURCE_FLAGGED): ?>
-      <h2>No flagged words<?=h($inTheseDecks)?></h2>
-      <p>Tap the flag on any flashcard to collect words here, then come back and quiz on just those.</p>
+    <?php if ($source === QuizManagement::SOURCE_MISSES_FLAGGED): ?>
+      <h2>Nothing missed or flagged<?=h($inTheseDecks)?> &#127881;</h2>
+      <p>There's nothing you've missed on a flashcard or in a quiz, and nothing flagged. That's the good kind of empty.</p>
     <?php elseif ($mode === QuizManagement::MODE_FILL_BLANK): ?>
       <h2>Nothing to ask here yet</h2>
       <p>Fill in the Blank needs words with an example sentence that uses the word,

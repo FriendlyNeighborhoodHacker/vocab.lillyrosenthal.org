@@ -21,7 +21,7 @@ $userId = (int)$me['id'];
 $readyByMode = [];
 $readyBySource = [];
 foreach ([QuizManagement::MODE_GUESS_WORD, QuizManagement::MODE_FILL_BLANK] as $mode) {
-    foreach ([QuizManagement::SOURCE_ALL, QuizManagement::SOURCE_MISSES, QuizManagement::SOURCE_FLAGGED] as $source) {
+    foreach ([QuizManagement::SOURCE_ALL, QuizManagement::SOURCE_MISSES_FLAGGED] as $source) {
         $readyBySource[$mode][$source] = QuizManagement::countAvailableQuestions($userId, $mode, [], $source);
     }
     $readyByMode[$mode] = $readyBySource[$mode][QuizManagement::SOURCE_ALL];
@@ -33,7 +33,7 @@ $selectedMode = (string)($_GET['mode'] ?? QuizManagement::MODE_GUESS_WORD);
 if (!QuizManagement::isValidMode($selectedMode)) {
     $selectedMode = QuizManagement::MODE_GUESS_WORD;
 }
-$selectedSource = (string)($_GET['source'] ?? QuizManagement::SOURCE_ALL);
+$selectedSource = QuizManagement::normalizeSource((string)($_GET['source'] ?? QuizManagement::SOURCE_ALL));
 if (!QuizManagement::isValidSource($selectedSource)) {
     $selectedSource = QuizManagement::SOURCE_ALL;
 }
@@ -45,13 +45,9 @@ $sourceCards = [
         'name' => 'All words',
         'blurb' => 'Works through the deck, starting with whatever you have practiced least recently.',
     ],
-    QuizManagement::SOURCE_MISSES => [
-        'name' => 'Words I miss',
-        'blurb' => 'Only words you have missed — on a flashcard, or in a quiz and not got right since.',
-    ],
-    QuizManagement::SOURCE_FLAGGED => [
-        'name' => 'Flagged words',
-        'blurb' => 'Only the words you flagged while going through the flashcards.',
+    QuizManagement::SOURCE_MISSES_FLAGGED => [
+        'name' => 'Words I missed and flagged words',
+        'blurb' => 'Words you have missed — on a flashcard, or in a quiz and not got right since — plus any you flagged.',
     ],
 ];
 

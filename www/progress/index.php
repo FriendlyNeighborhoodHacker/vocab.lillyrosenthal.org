@@ -175,7 +175,7 @@ header_html('My Stats');
         </tbody>
       </table>
     </div>
-    <p class="small"><a href="/quiz/?source=misses<?=h($quizTagQuery)?>">Quiz me on my misses</a> &middot; <a href="/review/?deck=needs_review<?=h($tagQuery)?>">flip through them</a></p>
+    <p class="small"><a href="/quiz/?source=misses_flagged<?=h($quizTagQuery)?>">Quiz me on my misses</a> &middot; <a href="/review/?deck=needs_review<?=h($tagQuery)?>">flip through them</a></p>
   <?php endif; ?>
 </div>
 

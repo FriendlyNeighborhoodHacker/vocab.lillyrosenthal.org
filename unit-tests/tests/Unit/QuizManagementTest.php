@@ -337,9 +337,9 @@ final class QuizManagementTest extends TestCase
         );
     }
 
-    // --- word pools: misses and flagged ---
+    // --- word pool: missed and flagged words ---
 
-    public function testMissesPoolSpansFlashcardsAndQuizzes(): void
+    public function testMissesFlaggedPoolSpansFlashcardsQuizzesAndFlags(): void
     {
         FlashcardProgress::markWord($this->userCtx, $this->wordIds['abate'], FlashcardProgress::MARK_NEEDS_REVIEW);
         QuizManagement::recordAnswer($this->userCtx, $this->wordIds['brusque'], QuizManagement::MODE_GUESS_WORD, 'nope');
@@ -349,26 +349,45 @@ final class QuizManagementTest extends TestCase
             $this->userCtx->id,
             QuizManagement::MODE_GUESS_WORD,
             [],
-            QuizManagement::SOURCE_MISSES
+            QuizManagement::SOURCE_MISSES_FLAGGED
         );
         $this->assertEqualsCanonicalizing(
             [$this->wordIds['abate'], $this->wordIds['brusque']],
             array_column($round, 'word_id')
         );
+
+        // Flagging pulls a word into the pool even when it was never missed.
+        FlashcardProgress::setWordFlag($this->userCtx, $this->wordIds['candor'], true);
+        $round = QuizManagement::buildQuizRound(
+            $this->userCtx->id,
+            QuizManagement::MODE_GUESS_WORD,
+            [],
+            QuizManagement::SOURCE_MISSES_FLAGGED
+        );
+        $this->assertEqualsCanonicalizing(array_values($this->wordIds), array_column($round, 'word_id'));
+    }
+
+    public function testOldSourceValuesNormalizeToTheCombinedPool(): void
+    {
+        $this->assertSame(QuizManagement::SOURCE_MISSES_FLAGGED, QuizManagement::normalizeSource('misses'));
+        $this->assertSame(QuizManagement::SOURCE_MISSES_FLAGGED, QuizManagement::normalizeSource('flagged'));
+        $this->assertSame(QuizManagement::SOURCE_ALL, QuizManagement::normalizeSource(QuizManagement::SOURCE_ALL));
+        $this->assertFalse(QuizManagement::isValidSource('misses'));
+        $this->assertFalse(QuizManagement::isValidSource('flagged'));
     }
 
     public function testAWordLeavesTheMissesPoolOnceItIsAnsweredRight(): void
     {
         QuizManagement::recordAnswer($this->userCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'nope');
         $this->assertSame(1, QuizManagement::countAvailableQuestions(
-            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES_FLAGGED
         ));
 
         $this->backdateAttemptsFor($this->wordIds['abate'], 2);
         QuizManagement::recordAnswer($this->userCtx, $this->wordIds['abate'], QuizManagement::MODE_GUESS_WORD, 'abate');
 
         $this->assertSame(0, QuizManagement::countAvailableQuestions(
-            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES_FLAGGED
         ));
     }
 
@@ -383,7 +402,7 @@ final class QuizManagementTest extends TestCase
         QuizManagement::markAttemptCorrectAnyway($this->userCtx, $outcome['attempt_id']);
 
         $this->assertSame(0, QuizManagement::countAvailableQuestions(
-            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES_FLAGGED
         ));
     }
 
@@ -395,19 +414,19 @@ final class QuizManagementTest extends TestCase
             $this->userCtx->id,
             QuizManagement::MODE_GUESS_WORD,
             [],
-            QuizManagement::SOURCE_FLAGGED
+            QuizManagement::SOURCE_MISSES_FLAGGED
         );
         $this->assertSame([$this->wordIds['candor']], array_column($round, 'word_id'));
 
         // Flags are personal, so the admin's flagged pool is still empty.
         $this->assertSame(0, QuizManagement::countAvailableQuestions(
-            $this->adminCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_FLAGGED
+            $this->adminCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES_FLAGGED
         ));
 
         // Unflagging empties it again.
         FlashcardProgress::setWordFlag($this->userCtx, $this->wordIds['candor'], false);
         $this->assertSame(0, QuizManagement::countAvailableQuestions(
-            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_FLAGGED
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [], QuizManagement::SOURCE_MISSES_FLAGGED
         ));
     }
 
@@ -422,13 +441,13 @@ final class QuizManagementTest extends TestCase
 
         // Flagged ∩ Green = abate only.
         $green = QuizManagement::buildQuizRound(
-            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [$greenId], QuizManagement::SOURCE_FLAGGED
+            $this->userCtx->id, QuizManagement::MODE_GUESS_WORD, [$greenId], QuizManagement::SOURCE_MISSES_FLAGGED
         );
         $this->assertSame([$this->wordIds['abate']], array_column($green, 'word_id'));
 
         // Flagged ∩ Fill in the Blank drops candor, which has no sentence.
         $fillable = QuizManagement::buildQuizRound(
-            $this->userCtx->id, QuizManagement::MODE_FILL_BLANK, [], QuizManagement::SOURCE_FLAGGED
+            $this->userCtx->id, QuizManagement::MODE_FILL_BLANK, [], QuizManagement::SOURCE_MISSES_FLAGGED
         );
         $this->assertSame([$this->wordIds['abate']], array_column($fillable, 'word_id'));
     }
