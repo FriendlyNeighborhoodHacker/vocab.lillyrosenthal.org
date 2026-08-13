@@ -9,8 +9,15 @@ class CsvImport {
     /**
      * Parse CSV text into headers + rows. $delimiter: ',' or "\t".
      * The first line is the header row. Returns
-     * ['headers' => string[], 'rows' => string[][]] with every row padded /
-     * truncated to the header width. Blank lines are skipped.
+     * ['headers' => string[], 'rows' => string[][], 'overlong' => int[]] with
+     * every row padded / truncated to the header width. Blank lines are
+     * skipped.
+     *
+     * 'overlong' is [row index => how many values it really had] for rows that
+     * carried MORE values than there are headers — an unquoted delimiter
+     * inside a cell, which shifts every later column and then loses the
+     * overflow to the truncation above. Missing trailing values are ordinary
+     * CSV and pad out silently.
      */
     public static function parseCsv(string $text, string $delimiter = ','): array {
         if (!in_array($delimiter, [',', "\t"], true)) {
@@ -24,6 +31,7 @@ class CsvImport {
         $lines = explode("\n", $text);
         $headers = null;
         $rows = [];
+        $overlong = [];
         foreach ($lines as $line) {
             if (trim($line) === '') {
                 continue;
@@ -35,13 +43,16 @@ class CsvImport {
                 continue;
             }
             $width = count($headers);
+            if (count($fields) > $width) {
+                $overlong[count($rows)] = count($fields);
+            }
             $fields = array_slice(array_pad($fields, $width, ''), 0, $width);
             $rows[] = $fields;
         }
         if ($headers === null || count(array_filter($headers, fn($h) => $h !== '')) === 0) {
             throw new InvalidArgumentException('No header row found.');
         }
-        return ['headers' => $headers, 'rows' => $rows];
+        return ['headers' => $headers, 'rows' => $rows, 'overlong' => $overlong];
     }
 
     /**

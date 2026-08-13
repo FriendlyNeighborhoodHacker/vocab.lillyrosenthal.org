@@ -18,6 +18,21 @@ final class WordSentencesTest extends TestCase
         );
     }
 
+    // The CSV-friendly spelling: a cell can hold neither a newline nor an
+    // unquoted comma, so several sentences share one line separated by "|".
+    public function testParsesSentencesSeparatedByAPipe(): void
+    {
+        $this->assertSame(
+            ['The storm abated.', 'Her anger abated.'],
+            WordSentences::parseInput('The storm abated. | Her anger abated.')
+        );
+    }
+
+    public function testAPipeIsNotASeparatorInAlreadyStoredValues(): void
+    {
+        $this->assertSame(['a | b'], WordSentences::fromStorage('a | b'));
+    }
+
     public function testParsesAJsonArray(): void
     {
         $this->assertSame(

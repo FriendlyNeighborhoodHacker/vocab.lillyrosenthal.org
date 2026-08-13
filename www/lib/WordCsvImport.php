@@ -92,10 +92,16 @@ class WordCsvImport {
      * Validate mapped rows. Returns one entry per row:
      * ['row' => 1-based line, 'data' => assoc of the mapped fields,
      *  'status' => 'valid'|'error', 'messages' => string[], 'changes' => string]
+     *
+     * $context carries what only the parse step knows: 'overlong' (row index =>
+     * how many values that row really had, from CsvImport::parseCsv) and
+     * 'column_count' (how many headers there were).
      */
     public static function validateRows(array $mappedRows, array $context = []): array {
         $validated = [];
         $seenWords = []; // lowercased word => first row number
+        $overlong = $context['overlong'] ?? [];
+        $columnCount = (int)($context['column_count'] ?? 0);
 
         foreach ($mappedRows as $i => $row) {
             $rowNumber = $i + 1;
@@ -114,6 +120,26 @@ class WordCsvImport {
                 $messages[] = 'Word is required.';
             } elseif (mb_strlen($word) > 100) {
                 $messages[] = 'Word must be 100 characters or fewer.';
+            }
+
+            // More values than columns: a delimiter inside a cell split the row,
+            // so everything after it is in the wrong column and the overflow was
+            // dropped. Worth stopping on — the row would import as nonsense.
+            if (isset($overlong[$i])) {
+                $messages[] = 'This row has ' . (int)$overlong[$i] . ' values but the file has '
+                    . $columnCount . ' columns, so its columns do not line up. A comma inside a '
+                    . 'cell splits the row unless the cell is wrapped in quotes.';
+            }
+
+            // Caught here rather than at commit: an over-long tag is almost
+            // always a row whose columns have shifted, and finding that out
+            // row by row beats one exception rolling the whole import back.
+            foreach (WordManagement::parseTagList((string)($data['tags'] ?? '')) as $tagName) {
+                if (mb_strlen($tagName) > 100) {
+                    $messages[] = 'Tag name is too long (100 characters max): "'
+                        . mb_substr($tagName, 0, 40) . '…". Check that this row\'s columns line up.';
+                    break;
+                }
             }
 
             $key = mb_strtolower($word);

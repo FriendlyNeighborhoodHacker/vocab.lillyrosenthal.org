@@ -150,7 +150,8 @@ a "public computer" checkbox on login skips it.
 - **Words**: list (with tag pills and a per-deck filter), add, edit
   (word / definition / sentences / synonyms / tags / sort order), delete
   (cascades everyone's marks and flags for that word). The sentences textarea
-  takes one sentence per line; all of them show on the flashcard.
+  takes one sentence per line (or separated by `|`); all of them show on the
+  flashcard.
 - **Import Words** — the main way content enters the app. A 4-step CSV wizard
   (Upload → Mapping → Validation → Commit) accepting a file or pasted text,
   comma or tab delimited. Columns: `word, definition, sentences, synonyms,
@@ -162,10 +163,17 @@ a "public computer" checkbox on login skips it.
   - `tags` cells hold deck names separated by `,` or `;`; unknown tags are
     auto-created; a blank mapped cell clears (tags/sentences/synonyms);
     a blank mapped definition on an existing word is an error.
-  - `sentences` cells hold one sentence as plain text, or several as a JSON
-    array (`["The storm abated.", "Her anger abated."]`) — a CSV cell can't
-    carry newlines comfortably, so JSON is how several fit in one. Either
-    spelling of the same sentences reads as "No changes" on re-import.
+  - `sentences` cells hold one sentence as plain text, or several separated by
+    `|` (`The storm abated. | Her anger abated.`). A CSV cell can carry neither
+    a newline nor an unquoted comma, so the pipe is the one separator a
+    hand-written file can use safely; a JSON array works too but the cell then
+    has to be quoted with doubled inner quotes. Any spelling of the same
+    sentences reads as "No changes" on re-import.
+  - Validation stops a row whose values outnumber the file's columns — an
+    unquoted comma inside a cell, which shifts every later column and drops the
+    overflow. Without that check such a row imports as nonsense (a synonym list
+    landing in `tags` quietly creates junk decks) or dies at commit with a
+    stray "Tag names must be 100 characters or fewer".
   - Validation shows a per-row Status and a Changes column ("Create new
     word" / "Update sentences, tags" / "No changes"); commit reports
     created / updated / unchanged / skipped. Re-importing the same file is

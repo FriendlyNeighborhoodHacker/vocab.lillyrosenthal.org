@@ -5,21 +5,25 @@ declare(strict_types=1);
 // array of strings — ["The storm abated.", "Her anger abated."] — with NULL
 // meaning none provided.
 //
-// Everything written to that column goes through parseInput() (which takes
-// either a JSON array or plain text, one sentence per line) and everything read
-// out of it goes through fromStorage(). fromStorage() still understands the
-// plain-text values written before the JSON migration, so a database that has
-// not run 05_sentences_as_json_array.sql yet keeps reading correctly.
+// Everything written to that column goes through parseInput() and everything
+// read out of it goes through fromStorage(). fromStorage() still understands
+// the plain-text values written before the JSON migration, so a database that
+// has not run 05_sentences_as_json_array.sql yet keeps reading correctly.
 //
 // Pure string handling, no SQL — the unit tests exercise it directly.
 class WordSentences {
+    // How several sentences are separated in one line of typed input. A CSV
+    // cell can hold neither a newline nor an unquoted comma, so a hand-written
+    // file needs a separator that survives both and never shows up in prose.
+    public const SEPARATOR = '|';
+
     /**
      * Text typed by an admin, or read from a CSV cell, as a list of sentences.
-     * A JSON array is taken as the list; anything else is plain text, one
-     * sentence per line. Blank entries are dropped.
+     * Three spellings, all equivalent: a JSON array, one sentence per line, or
+     * one line with the sentences separated by "|". Blank entries are dropped.
      */
     public static function parseInput(?string $input): array {
-        return self::interpret($input);
+        return self::interpret($input, true);
     }
 
     /** How a list of sentences is stored: a JSON array, or NULL for none. */
@@ -39,7 +43,9 @@ class WordSentences {
      * JSON migration (plain text, one sentence per line) still read correctly.
      */
     public static function fromStorage(?string $stored): array {
-        return self::interpret($stored);
+        // No "|" splitting here: a stored value is either the JSON array this
+        // class wrote or a legacy plain-text one, and neither used it.
+        return self::interpret($stored, false);
     }
 
     /**
@@ -56,11 +62,12 @@ class WordSentences {
         return implode("\n", self::fromStorage($stored));
     }
 
-    // Both directions read the same two shapes, so they share one reader.
-    private static function interpret(?string $text): array {
+    // Both directions read JSON first and fall back to plain text; only typed
+    // input also treats "|" as a separator.
+    private static function interpret(?string $text, bool $splitOnSeparator): array {
         $text = trim((string)$text);
         if ($text === '') return [];
-        return self::decodeJsonArray($text) ?? self::splitLines($text);
+        return self::decodeJsonArray($text) ?? self::splitPlainText($text, $splitOnSeparator);
     }
 
     // A JSON array -> its sentences; null when the text is not a JSON array at
@@ -72,8 +79,11 @@ class WordSentences {
         return self::cleanList($decoded);
     }
 
-    private static function splitLines(string $text): array {
-        return self::cleanList(preg_split('/\r\n|\r|\n/', $text) ?: []);
+    private static function splitPlainText(string $text, bool $splitOnSeparator): array {
+        $pattern = $splitOnSeparator
+            ? '/\r\n|\r|\n|' . preg_quote(self::SEPARATOR, '/') . '/'
+            : '/\r\n|\r|\n/';
+        return self::cleanList(preg_split($pattern, $text) ?: []);
     }
 
     // Trim, drop blanks, drop anything that isn't a plain string/number.

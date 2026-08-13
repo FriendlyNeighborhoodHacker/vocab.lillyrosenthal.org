@@ -52,7 +52,7 @@ header_html('Edit ' . $word['word']);
     </label>
     <label>Sentences
       <textarea name="sentences" rows="3" placeholder="Example sentence(s) using the word (optional)"><?=h($form['sentences'])?></textarea>
-      <small class="small">One sentence per line — every one of them shows on the flashcard.</small>
+      <small class="small">One sentence per line (or separated by |) — every one of them shows on the flashcard.</small>
     </label>
     <label>Synonyms
       <input type="text" name="synonyms" value="<?=h($form['synonyms'])?>" placeholder="e.g. reduce, diminish (optional)">

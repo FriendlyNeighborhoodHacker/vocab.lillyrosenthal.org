@@ -136,6 +136,57 @@ final class WordCsvImportTest extends TestCase
         $this->assertSame('subside', $abate['synonyms']);
     }
 
+    public function testCommitStoresSeveralSentencesFromAPipeSeparatedCell(): void
+    {
+        $validated = WordCsvImport::validateRows([
+            ['word' => 'abate', 'definition' => 'to lessen',
+             'sentences' => 'The storm abated. | Her anger abated.'],
+        ]);
+        WordCsvImport::commit($this->adminCtx, $validated);
+
+        $abate = WordManagement::findByWordText('abate');
+        $this->assertSame(
+            ['The storm abated.', 'Her anger abated.'],
+            WordSentences::fromStorage($abate['sentences'])
+        );
+    }
+
+    // An over-long tag is almost always a row whose columns have shifted. It
+    // must fail that row at validation, not throw and roll the import back.
+    public function testValidateRejectsAnOverlongTagNameInsteadOfFailingAtCommit(): void
+    {
+        $validated = WordCsvImport::validateRows([
+            ['word' => 'abate', 'definition' => 'to lessen', 'tags' => str_repeat('x', 101)],
+            ['word' => 'candor', 'definition' => 'honesty', 'tags' => 'Green'],
+        ]);
+
+        $this->assertSame('error', $validated[0]['status']);
+        $this->assertStringContainsString('Tag name is too long', $validated[0]['messages'][0]);
+        $this->assertSame('valid', $validated[1]['status']);
+
+        // The good row still imports; the bad one is skipped, not fatal.
+        $summary = WordCsvImport::commit($this->adminCtx, $validated);
+        $this->assertSame(['created' => 1, 'updated' => 0, 'unchanged' => 0, 'skipped' => 1], $summary);
+    }
+
+    public function testValidateFlagsARowWhoseColumnsDoNotLineUp(): void
+    {
+        $parsed = CsvImport::parseCsv(
+            "word,definition,tags\n"
+            . "abate,to lessen,Green\n"
+            . "candor,honesty, and openness,Green\n"
+        );
+        $mapping = CsvImport::suggestColumnMapping($parsed['headers'], WordCsvImport::targetFields());
+        $validated = WordCsvImport::validateRows(
+            CsvImport::applyMapping($parsed['rows'], $mapping),
+            ['overlong' => $parsed['overlong'], 'column_count' => count($parsed['headers'])]
+        );
+
+        $this->assertSame('valid', $validated[0]['status']);
+        $this->assertSame('error', $validated[1]['status']);
+        $this->assertStringContainsString('columns do not line up', $validated[1]['messages'][0]);
+    }
+
     public function testCommitStoresSeveralSentencesFromAJsonArrayCell(): void
     {
         $validated = WordCsvImport::validateRows([

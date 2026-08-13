@@ -26,6 +26,29 @@ final class CsvImportTest extends TestCase
         ], $parsed['rows']);
     }
 
+    // A short row is ordinary CSV; a row with extra values means a delimiter
+    // inside a cell split it, which shifts every later column.
+    public function testParseFlagsRowsWithMoreValuesThanColumns(): void
+    {
+        $parsed = CsvImport::parseCsv(
+            "word,definition,tags\n"
+            . "abate,to lessen,Green\n"
+            . "candor,honesty, and openness,Green\n"
+            . "dearth,a lack\n"
+        );
+
+        // Row index 1 really had 4 values; row 2 is merely short.
+        $this->assertSame([1 => 4], $parsed['overlong']);
+        // The overflow is still dropped, which is exactly why it is flagged.
+        $this->assertSame(['candor', 'honesty', 'and openness'], $parsed['rows'][1]);
+    }
+
+    public function testParseFlagsNothingWhenEveryRowLinesUp(): void
+    {
+        $parsed = CsvImport::parseCsv("word,definition\nabate,\"to lessen, reduce\"\ncandor,honesty");
+        $this->assertSame([], $parsed['overlong']);
+    }
+
     public function testParseSkipsBlankLinesAndNormalizesNewlines(): void
     {
         $parsed = CsvImport::parseCsv("word,definition\r\n\r\nabate,to lessen\r\n");

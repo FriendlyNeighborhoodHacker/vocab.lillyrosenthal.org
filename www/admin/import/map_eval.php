@@ -31,12 +31,16 @@ try {
         throw new InvalidArgumentException('Map at least one column to a field.');
     }
     $mappedRows = CsvImport::applyMapping($state['rows'], $mapping);
-    $validated = $flowClass::validateRows($mappedRows);
+    $validated = $flowClass::validateRows($mappedRows, [
+        'overlong' => $state['overlong'] ?? [],
+        'column_count' => count($state['headers']),
+    ]);
 
     // The mapped data replaces the original CSV from here on (per guideline).
     $_SESSION[import_session_key($flow)] = [
         'headers' => $state['headers'],
         'rows' => $state['rows'],
+        'overlong' => $state['overlong'] ?? [],
         'mapping' => $mapping,
         'validated' => $validated,
     ];

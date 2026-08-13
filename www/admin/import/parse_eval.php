@@ -28,6 +28,7 @@ try {
     $_SESSION[import_session_key($flow)] = [
         'headers' => $parsed['headers'],
         'rows' => $parsed['rows'],
+        'overlong' => $parsed['overlong'],
         'mapping' => CsvImport::suggestColumnMapping($parsed['headers'], $flowClass::targetFields()),
     ];
     header('Location: /admin/import/map.php' . import_query_string($flow));
