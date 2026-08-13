@@ -5,6 +5,7 @@
 require_once __DIR__ . '/../partials.php';
 require_once __DIR__ . '/../lib/FlashcardProgress.php';
 require_once __DIR__ . '/../lib/WordManagement.php';
+require_once __DIR__ . '/../lib/WordSentences.php';
 Application::init();
 require_login();
 
@@ -40,7 +41,7 @@ $deckJson = array_map(fn($row) => [
     'id' => (int)$row['id'],
     'word' => (string)$row['word'],
     'definition' => (string)$row['definition'],
-    'sentences' => (string)($row['sentences'] ?? ''),
+    'sentences' => WordSentences::fromStorage($row['sentences'] ?? null),
     'synonyms' => (string)($row['synonyms'] ?? ''),
     'flagged' => !empty($row['is_flagged']),
     'marked' => !empty($row['last_mark']),   // ever answered Got it / Need More Review

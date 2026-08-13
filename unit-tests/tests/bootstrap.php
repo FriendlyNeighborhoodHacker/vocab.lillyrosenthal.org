@@ -8,6 +8,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../www/config.php';
 require_once __DIR__ . '/../../www/lib/UserManagement.php';
 require_once __DIR__ . '/../../www/lib/WordManagement.php';
+require_once __DIR__ . '/../../www/lib/WordSentences.php';
 require_once __DIR__ . '/../../www/lib/FlashcardProgress.php';
 require_once __DIR__ . '/../../www/lib/QuizManagement.php';
 require_once __DIR__ . '/../../www/lib/CsvImport.php';

@@ -31,6 +31,19 @@
   var toastTimer;
   var savePositionTimer;
 
+  // A word can carry several example sentences; each gets its own line, and an
+  // empty list hides the block entirely.
+  function renderSentences(el, sentences) {
+    var list = Array.isArray(sentences) ? sentences : (sentences ? [sentences] : []);
+    el.textContent = '';
+    list.forEach(function (sentence) {
+      var line = document.createElement('div');
+      line.textContent = sentence;
+      el.appendChild(line);
+    });
+    el.classList.toggle('hidden', list.length === 0);
+  }
+
   function showToast(message) {
     toast.textContent = message;
     toast.classList.remove('hidden');
@@ -105,8 +118,7 @@
     card.classList.remove('flipped');
     wordEl.textContent = entry.word;
     definitionEl.textContent = entry.definition;
-    sentencesEl.textContent = entry.sentences;
-    sentencesEl.classList.toggle('hidden', !entry.sentences);
+    renderSentences(sentencesEl, entry.sentences);
     synonymsEl.textContent = entry.synonyms ? 'Similar: ' + entry.synonyms : '';
     synonymsEl.classList.toggle('hidden', !entry.synonyms);
     flagBtn.classList.toggle('flagged', entry.flagged);

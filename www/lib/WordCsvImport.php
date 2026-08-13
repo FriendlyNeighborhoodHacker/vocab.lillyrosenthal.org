@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/UserContext.php';
 require_once __DIR__ . '/ActivityLog.php';
 require_once __DIR__ . '/WordManagement.php';
+require_once __DIR__ . '/WordSentences.php';
 
 // The words CSV import flow (columns: word, definition, sentences, synonyms,
 // tags), used by the admin/import/ wizard. Rows are matched to existing words
@@ -13,7 +14,9 @@ require_once __DIR__ . '/WordManagement.php';
 // never touched on existing words, so a file with only word + synonyms can
 // fill in synonyms without disturbing definitions. The tags column carries
 // deck names separated by , or ; (e.g. "Green" or "White and Blue; Green");
-// unknown tags are created automatically.
+// unknown tags are created automatically. The sentences column carries one
+// sentence as plain text, or several as a JSON array
+// (["The storm abated.", "Her anger abated."]).
 class WordCsvImport {
     // words-table columns (besides the word itself) that the import can create
     // or edit. Tags are handled separately (they live in word_tags).
@@ -39,13 +42,37 @@ class WordCsvImport {
         return trim((string)$value);
     }
 
+    /**
+     * What a mapped cell would put in its words column, or NULL to clear it.
+     * Sentences are stored as a JSON array, so the cell — plain text or a JSON
+     * array — is re-encoded here rather than stored as typed.
+     */
+    private static function storageValue(string $field, ?string $cell): ?string {
+        if ($field === 'sentences') {
+            return WordSentences::normalizeInput($cell);
+        }
+        $value = self::normalized($cell);
+        return $value === '' ? null : $value;
+    }
+
+    // The same column's stored value in that canonical form, so a row only
+    // counts as changed when the sentences themselves differ — not when a file
+    // spells the same sentence out as plain text instead of a JSON array.
+    private static function storedValue(string $field, array $existing): ?string {
+        if ($field === 'sentences') {
+            return WordSentences::canonicalize($existing['sentences'] ?? null);
+        }
+        $value = self::normalized($existing[$field] ?? null);
+        return $value === '' ? null : $value;
+    }
+
     // The provided fields of a row that differ from the stored word. "tags"
     // compares as a set (order- and case-insensitive).
     private static function changedFieldsForExistingWord(array $row, array $existing): array {
         $changed = [];
         foreach (self::EDITABLE_FIELDS as $field) {
             if (!array_key_exists($field, $row)) continue; // column not mapped
-            if (self::normalized($row[$field]) !== self::normalized($existing[$field] ?? null)) {
+            if (self::storageValue($field, $row[$field]) !== self::storedValue($field, $existing)) {
                 $changed[] = $field;
             }
         }
@@ -167,11 +194,10 @@ class WordCsvImport {
                     $params = [];
                     foreach ($changed as $field) {
                         if ($field === 'tags') continue; // synced below, not a words column
-                        $value = self::normalized($data[$field]);
                         $set[] = "$field = ?";
                         // Blank sentences/synonyms clear the field (definition
                         // is validated non-blank above).
-                        $params[] = $value === '' ? null : $value;
+                        $params[] = self::storageValue($field, $data[$field]);
                     }
                     if ($set) {
                         $params[] = (int)$existing['id'];
@@ -183,16 +209,14 @@ class WordCsvImport {
                     }
                     $updated++;
                 } else {
-                    $sentences = self::normalized($data['sentences'] ?? '');
-                    $synonyms = self::normalized($data['synonyms'] ?? '');
                     $st = $pdo->prepare(
                         'INSERT INTO words (word, definition, sentences, synonyms, sort_order, created_by_user_id) VALUES (?,?,?,?,?,?)'
                     );
                     $st->execute([
                         $word,
                         self::normalized($data['definition']),
-                        $sentences === '' ? null : $sentences,
-                        $synonyms === '' ? null : $synonyms,
+                        self::storageValue('sentences', $data['sentences'] ?? null),
+                        self::storageValue('synonyms', $data['synonyms'] ?? null),
                         $nextSortOrder,
                         $ctx->id,
                     ]);

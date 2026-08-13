@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/UserContext.php';
 require_once __DIR__ . '/ActivityLog.php';
+require_once __DIR__ . '/WordSentences.php';
 
 // The global word list (shared flashcard deck). All SQL touching the words
 // table lives here; every write takes a UserContext and is activity-logged.
@@ -22,19 +23,22 @@ class WordManagement {
         return trim($word);
     }
 
-    // Optional text fields (sentences, synonyms) store NULL when blank.
+    // Optional text fields (synonyms) store NULL when blank. Sentences have
+    // their own shape — a JSON array — so they go through WordSentences.
     private static function normalizeOptionalText(?string $value): ?string {
         if ($value === null) return null;
         $value = trim($value);
         return $value === '' ? null : $value;
     }
 
+    // $sentences is what the admin typed or the CSV held: a JSON array of
+    // sentences, or plain text with one sentence per line.
     public static function addWord(UserContext $ctx, string $word, string $definition, ?string $sentences = null, ?string $synonyms = null, ?int $sortOrder = null): int {
         self::assertAdmin($ctx);
 
         $word = self::normalizeWord($word);
         $definition = trim($definition);
-        $sentences = self::normalizeOptionalText($sentences);
+        $sentences = WordSentences::normalizeInput($sentences);
         $synonyms = self::normalizeOptionalText($synonyms);
         if ($word === '') {
             throw new InvalidArgumentException('Word is required.');
@@ -68,7 +72,7 @@ class WordManagement {
 
         $word = self::normalizeWord($word);
         $definition = trim($definition);
-        $sentences = self::normalizeOptionalText($sentences);
+        $sentences = WordSentences::normalizeInput($sentences);
         $synonyms = self::normalizeOptionalText($synonyms);
         if ($word === '') {
             throw new InvalidArgumentException('Word is required.');

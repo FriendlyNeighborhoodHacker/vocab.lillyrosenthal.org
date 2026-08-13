@@ -18,8 +18,9 @@ request it grew from is preserved at the bottom.
 
 **Review flashcards** (`/review/`, the home page after login):
 - One large card at a time. Click / tap / space flips it with a quick 160ms
-  cross-fade: front = the word, back = definition, plus an example sentence
-  (italic) and synonyms ("Similar: …" pill) when the word has them.
+  cross-fade: front = the word, back = definition, plus the word's example
+  sentences (italic, one per line — a word can have several) and synonyms
+  ("Similar: …" pill) when the word has them.
 - Under the card: mint **Got it!** and coral **Need More Review** buttons.
   Marks are per-user, saved by AJAX with optimistic UI (the deck advances
   immediately; failures surface in a toast — errors are never swallowed).
@@ -51,9 +52,11 @@ request it grew from is preserved at the bottom.
 **Quiz** (`/quiz/`) — recall practice, where the flashcards are recognition
 practice. Two modes, both "type the word":
 - **Guess the Word**: a definition, type the word it belongs to.
-- **Fill in the Blank**: the word's example sentence with the word cut out.
-  Only words whose sentence actually uses the word can be asked, so this mode
-  has a slightly smaller pool (255 of 256 words today).
+- **Fill in the Blank**: one of the word's example sentences with the word cut
+  out (the first one that actually uses it). Only words with such a sentence
+  can be asked, so this mode has a slightly smaller pool (255 of 256 words
+  today). A form the word takes in *any* of its sentences is accepted as the
+  answer, since the blank stands where an inflected form used to be.
 - The launcher picks the mode, the **pool of words**, **any combination of
   decks** (tag checkboxes — none ticked = every word), and a round length
   (10 / 20 / 40 / everything). The three pools are:
@@ -146,7 +149,8 @@ a "public computer" checkbox on login skips it.
 
 - **Words**: list (with tag pills and a per-deck filter), add, edit
   (word / definition / sentences / synonyms / tags / sort order), delete
-  (cascades everyone's marks and flags for that word).
+  (cascades everyone's marks and flags for that word). The sentences textarea
+  takes one sentence per line; all of them show on the flashcard.
 - **Import Words** — the main way content enters the app. A 4-step CSV wizard
   (Upload → Mapping → Validation → Commit) accepting a file or pasted text,
   comma or tab delimited. Columns: `word, definition, sentences, synonyms,
@@ -158,6 +162,10 @@ a "public computer" checkbox on login skips it.
   - `tags` cells hold deck names separated by `,` or `;`; unknown tags are
     auto-created; a blank mapped cell clears (tags/sentences/synonyms);
     a blank mapped definition on an existing word is an error.
+  - `sentences` cells hold one sentence as plain text, or several as a JSON
+    array (`["The storm abated.", "Her anger abated."]`) — a CSV cell can't
+    carry newlines comfortably, so JSON is how several fit in one. Either
+    spelling of the same sentences reads as "No changes" on re-import.
   - Validation shows a per-row Status and a Changes column ("Create new
     word" / "Update sentences, tags" / "No changes"); commit reports
     created / updated / unchanged / skipped. Re-importing the same file is
@@ -175,7 +183,9 @@ a "public computer" checkbox on login skips it.
   `shuffle_seed` (NULL = original order) and `deck_position` (resume point in
   the full deck).
 - `words` — the global list: word (unique), definition, sentences, synonyms,
-  sort_order.
+  sort_order. `sentences` is a JSON array of strings (a word can have several
+  example sentences), NULL when none; `WordSentences` is the only thing that
+  encodes/decodes it, and it still reads the pre-migration plain-text values.
 - `tags` + `word_tags` — global many-to-many "decks" on words.
 - `user_word_state` — one row per user×word touched: is_flagged, last_mark
   (got_it / needs_review), per-mark counters, last_reviewed_at.
@@ -191,8 +201,8 @@ a "public computer" checkbox on login skips it.
 
 Migrations live in `www/db_migrations/` (currently `2026-08-09_initial_schema`,
 `01_add_sentences_and_synonyms`, `02_add_tags`, `03_user_deck_positions`,
-`04_quiz_attempts`, all idempotent). schema.sql must always be updated
-alongside any migration.
+`04_quiz_attempts`, `05_sentences_as_json_array`, all idempotent). schema.sql
+must always be updated alongside any migration.
 
 ## Code layout (web root = www/)
 
@@ -202,7 +212,8 @@ alongside any migration.
   includes optional SUPER_PASSWORD test backdoor and SMTP settings).
 - `lib/` — `WordManagement` (words + tags), `FlashcardProgress` (decks, marks,
   flags, positions, score/stats), `QuizManagement` (quiz rounds, sentence
-  blanking, answer judging, points/stats), `WordCsvImport` (validate/commit),
+  blanking, answer judging, points/stats), `WordSentences` (the one place that
+  reads/writes the sentences JSON array), `WordCsvImport` (validate/commit),
   `CsvImport` (pure parsing/mapping), `UserManagement`, `UserContext`,
   `ActivityLog`, `EmailLog`, `Application`, `ApplicationUI` (page shell, nav,
   score chip, filemtime cache-busted assets).

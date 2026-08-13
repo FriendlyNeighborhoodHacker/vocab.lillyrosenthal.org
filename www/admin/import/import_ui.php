@@ -67,13 +67,13 @@ function import_columns_help_html(array $flow): string {
     $columns = [
         ['word', 'required', 'the vocabulary word'],
         ['definition', 'required*', '*for new words; existing words keep theirs if the column is unmapped'],
-        ['sentences', 'optional', 'example sentence(s) using the word; blank clears the field'],
+        ['sentences', 'optional', 'one example sentence as plain text, or several as a JSON array — ["The storm abated.", "Her anger abated."]. Every sentence shows on the flashcard; blank clears the field'],
         ['synonyms', 'optional', 'e.g. "reduce, diminish"; blank clears the field'],
         ['tags', 'optional', 'deck name(s), separated by ; or , — e.g. "Green" or "White and Blue; Green". New tags are created automatically; blank clears the word\'s tags'],
     ];
     $example = "word,definition,sentences,synonyms,tags\n"
         . "abate,to become less intense or widespread,The storm suddenly abated.,\"subside, diminish\",White and Blue\n"
-        . "circumspect,wary and unwilling to take risks,She was circumspect in her answers.,\"cautious, wary\",White and Blue\n"
+        . "circumspect,wary and unwilling to take risks,\"[\"\"She was circumspect in her answers.\"\", \"\"Be circumspect online.\"\"]\",\"cautious, wary\",White and Blue\n"
         . "verdant,green with vegetation,The verdant hills rolled on.,\"lush, leafy\",Green";
 
     $html = '<div class="card"><h3>What to include</h3>';

@@ -94,12 +94,12 @@ final class WordCsvImportTest extends TestCase
 
         $abate = WordManagement::findByWordText('abate');
         $this->assertSame('to lessen', $abate['definition']);
-        $this->assertSame('The storm abated.', $abate['sentences']);
+        $this->assertSame(['The storm abated.'], WordSentences::fromStorage($abate['sentences']));
         $this->assertSame('subside', $abate['synonyms']);
 
         $candor = WordManagement::findByWordText('candor');
         $this->assertSame('honesty', $candor['definition']);
-        $this->assertSame('She spoke with candor.', $candor['sentences']);
+        $this->assertSame(['She spoke with candor.'], WordSentences::fromStorage($candor['sentences']));
         $this->assertSame('frankness', $candor['synonyms']);
         $this->assertSame(2, (int)$candor['sort_order']); // appended after abate
         $this->assertSame(2, WordManagement::countWords());
@@ -118,7 +118,7 @@ final class WordCsvImportTest extends TestCase
         $this->assertSame(1, $summary['updated']);
         $abate = WordManagement::findByWordText('abate');
         $this->assertSame('to lessen', $abate['definition']);
-        $this->assertSame('Old sentence.', $abate['sentences']);
+        $this->assertSame(['Old sentence.'], WordSentences::fromStorage($abate['sentences']));
         $this->assertSame('diminish, wane', $abate['synonyms']);
     }
 
@@ -134,6 +134,44 @@ final class WordCsvImportTest extends TestCase
         $abate = WordManagement::findByWordText('abate');
         $this->assertNull($abate['sentences']);
         $this->assertSame('subside', $abate['synonyms']);
+    }
+
+    public function testCommitStoresSeveralSentencesFromAJsonArrayCell(): void
+    {
+        $validated = WordCsvImport::validateRows([
+            ['word' => 'abate', 'definition' => 'to lessen',
+             'sentences' => '["The storm abated.", "Her anger abated."]'],
+        ]);
+        WordCsvImport::commit($this->adminCtx, $validated);
+
+        $abate = WordManagement::findByWordText('abate');
+        $this->assertSame(
+            ['The storm abated.', 'Her anger abated.'],
+            WordSentences::fromStorage($abate['sentences'])
+        );
+    }
+
+    // A one-sentence cell and a one-element JSON array say the same thing, so
+    // re-importing one over the other is not a change.
+    public function testSentencesCompareByContentNotByHowTheCellIsWritten(): void
+    {
+        WordManagement::addWord($this->adminCtx, 'abate', 'to lessen', 'The storm abated.');
+
+        $validated = WordCsvImport::validateRows([
+            ['word' => 'abate', 'definition' => 'to lessen', 'sentences' => '["The storm abated."]'],
+        ]);
+        $this->assertSame('No changes', $validated[0]['changes']);
+    }
+
+    public function testAddingASecondSentenceCountsAsAChange(): void
+    {
+        WordManagement::addWord($this->adminCtx, 'abate', 'to lessen', 'The storm abated.');
+
+        $validated = WordCsvImport::validateRows([
+            ['word' => 'abate', 'definition' => 'to lessen',
+             'sentences' => '["The storm abated.", "Her anger abated."]'],
+        ]);
+        $this->assertSame('Update sentences', $validated[0]['changes']);
     }
 
     public function testCommitAppendsMultipleNewWordsInOrder(): void

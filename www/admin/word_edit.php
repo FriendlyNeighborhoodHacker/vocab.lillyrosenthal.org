@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../partials.php';
 require_once __DIR__ . '/../lib/WordManagement.php';
+require_once __DIR__ . '/../lib/WordSentences.php';
 Application::init();
 require_admin();
 
@@ -25,6 +26,8 @@ foreach (['word', 'definition', 'sentences', 'synonyms', 'sort_order'] as $field
     $form[$field] = $_GET[$field] ?? ($word[$field] ?? '');
 }
 $form['tags'] = $_GET['tags'] ?? implode(', ', WordManagement::tagNamesForWord($wordId));
+// Sentences are stored as a JSON array; the textarea edits them one per line.
+$form['sentences'] = $_GET['sentences'] ?? WordSentences::asLines($word['sentences'] ?? null);
 
 header_html('Edit ' . $word['word']);
 ?>
@@ -48,7 +51,8 @@ header_html('Edit ' . $word['word']);
       <textarea name="definition" rows="3" required><?=h($form['definition'])?></textarea>
     </label>
     <label>Sentences
-      <textarea name="sentences" rows="2" placeholder="Example sentence(s) using the word (optional)"><?=h($form['sentences'])?></textarea>
+      <textarea name="sentences" rows="3" placeholder="Example sentence(s) using the word (optional)"><?=h($form['sentences'])?></textarea>
+      <small class="small">One sentence per line — every one of them shows on the flashcard.</small>
     </label>
     <label>Synonyms
       <input type="text" name="synonyms" value="<?=h($form['synonyms'])?>" placeholder="e.g. reduce, diminish (optional)">

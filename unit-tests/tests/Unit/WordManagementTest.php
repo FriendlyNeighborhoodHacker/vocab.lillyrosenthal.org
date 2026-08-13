@@ -33,8 +33,30 @@ final class WordManagementTest extends TestCase
         $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen', 'The storm abated.', 'subside, diminish');
 
         $word = WordManagement::findById($id);
-        $this->assertSame('The storm abated.', $word['sentences']);
+        $this->assertSame('["The storm abated."]', $word['sentences']);
         $this->assertSame('subside, diminish', $word['synonyms']);
+    }
+
+    public function testAddWordStoresSeveralSentencesTypedOnePerLine(): void
+    {
+        $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen', "The storm abated.\n\nHer anger abated.");
+
+        $word = WordManagement::findById($id);
+        $this->assertSame(
+            ['The storm abated.', 'Her anger abated.'],
+            WordSentences::fromStorage($word['sentences'])
+        );
+    }
+
+    public function testAddWordStoresSeveralSentencesGivenAsAJsonArray(): void
+    {
+        $id = WordManagement::addWord($this->adminCtx, 'abate', 'to lessen', '["The storm abated.", "Her anger abated."]');
+
+        $word = WordManagement::findById($id);
+        $this->assertSame(
+            ['The storm abated.', 'Her anger abated.'],
+            WordSentences::fromStorage($word['sentences'])
+        );
     }
 
     public function testAddWordStoresBlankOptionalFieldsAsNull(): void
@@ -88,7 +110,7 @@ final class WordManagementTest extends TestCase
 
         $word = WordManagement::findById($id);
         $this->assertSame('to become less intense', $word['definition']);
-        $this->assertSame('The storm abated.', $word['sentences']);
+        $this->assertSame(['The storm abated.'], WordSentences::fromStorage($word['sentences']));
         $this->assertSame('subside', $word['synonyms']);
         $this->assertSame(5, (int)$word['sort_order']);
     }

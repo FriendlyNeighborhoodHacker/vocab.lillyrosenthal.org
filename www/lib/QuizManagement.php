@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/UserContext.php';
 require_once __DIR__ . '/ActivityLog.php';
 require_once __DIR__ . '/WordManagement.php';
+require_once __DIR__ . '/WordSentences.php';
 
 // The typing quizzes — a different way to review the same global word list:
 //
@@ -245,19 +246,18 @@ class QuizManagement {
     // ===== Blanking out the answer =====
 
     /**
-     * An example sentence with the word blanked out, or null when the stored
-     * sentences never actually use the word (nothing to blank = no question).
-     * With several sentences, the first one using the word wins.
+     * An example sentence with the word blanked out, or null when the word's
+     * stored sentences never actually use it (nothing to blank = no question).
+     * $sentences is a raw words.sentences value; with several sentences, the
+     * first one using the word wins.
      */
     public static function buildFillBlankPrompt(string $sentences, string $word): ?string {
-        $sentences = trim($sentences);
-        if ($sentences === '' || trim($word) === '') return null;
+        if (trim($word) === '') return null;
 
         $pattern = self::wordFormPattern($word);
-        foreach (preg_split('/\r\n|\r|\n/', $sentences) ?: [] as $line) {
-            $line = trim($line);
-            if ($line !== '' && preg_match($pattern, $line)) {
-                return (string)preg_replace($pattern, self::BLANK, $line);
+        foreach (WordSentences::fromStorage($sentences) as $sentence) {
+            if (preg_match($pattern, $sentence)) {
+                return (string)preg_replace($pattern, self::BLANK, $sentence);
             }
         }
         return null;
@@ -347,8 +347,12 @@ class QuizManagement {
         $word = (string)($wordRow['word'] ?? '');
         $accepted = [self::normalizeAnswer($word)];
         if ($mode === self::MODE_FILL_BLANK) {
-            foreach (self::findWordFormsInSentence((string)($wordRow['sentences'] ?? ''), $word) as $form) {
-                $accepted[] = self::normalizeAnswer($form);
+            // Any form used in any of the word's sentences: the blank stands
+            // where an inflected form used to be.
+            foreach (WordSentences::fromStorage((string)($wordRow['sentences'] ?? '')) as $sentence) {
+                foreach (self::findWordFormsInSentence($sentence, $word) as $form) {
+                    $accepted[] = self::normalizeAnswer($form);
+                }
             }
         }
         $accepted = array_values(array_filter(array_unique($accepted)));
@@ -460,7 +464,7 @@ class QuizManagement {
             'can_claim_correct' => $points === 0,
             'word' => (string)$word['word'],
             'definition' => (string)$word['definition'],
-            'sentences' => (string)($word['sentences'] ?? ''),
+            'sentences' => WordSentences::fromStorage($word['sentences'] ?? null),
             'synonyms' => (string)($word['synonyms'] ?? ''),
             'totals' => self::getQuizStatsForUser($ctx->id),
         ];

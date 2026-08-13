@@ -142,6 +142,20 @@
   var toast = document.getElementById('toast');
   var toastTimer;
 
+  // A word can carry several example sentences; each gets its own line. A
+  // string covers rounds resumed from storage that were saved before the
+  // sentences became a list.
+  function renderSentences(el, sentences) {
+    var list = Array.isArray(sentences) ? sentences : (sentences ? [sentences] : []);
+    el.textContent = '';
+    list.forEach(function (sentence) {
+      var line = document.createElement('div');
+      line.textContent = sentence;
+      el.appendChild(line);
+    });
+    el.classList.toggle('hidden', list.length === 0);
+  }
+
   function showToast(message) {
     toast.textContent = message;
     toast.classList.remove('hidden');
@@ -445,8 +459,7 @@
     // repeating it here would just pad the panel.
     fbDefinition.textContent = a.definition;
     fbDefinition.classList.toggle('hidden', QUIZ_MODE === 'guess_word');
-    fbSentence.textContent = a.sentences || '';
-    fbSentence.classList.toggle('hidden', !a.sentences);
+    renderSentences(fbSentence, a.sentences);
     fbSynonyms.textContent = a.synonyms ? 'Similar: ' + a.synonyms : '';
     fbSynonyms.classList.toggle('hidden', !a.synonyms);
     fbPoints.textContent = a.points > 0

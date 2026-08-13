@@ -87,7 +87,7 @@ CREATE TABLE words (
   id INT AUTO_INCREMENT PRIMARY KEY,
   word VARCHAR(100) NOT NULL UNIQUE,
   definition TEXT NOT NULL,
-  sentences TEXT DEFAULT NULL COMMENT 'Example sentence(s) using the word; NULL = none provided',
+  sentences TEXT DEFAULT NULL COMMENT 'Example sentences as a JSON array of strings, e.g. ["The storm abated."]; NULL = none provided',
   synonyms TEXT DEFAULT NULL COMMENT 'Synonyms as one string, e.g. "reduce, diminish"; NULL = none provided',
   sort_order INT NOT NULL,
   created_by_user_id INT DEFAULT NULL,

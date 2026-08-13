@@ -471,7 +471,11 @@ pre.import-example {
   overflow-wrap: anywhere;
 }
 .flashcard-definition { font-size: clamp(1.1rem, 3vw, 1.4rem); font-weight: 500; overflow-wrap: anywhere; }
+/* One child div per example sentence — a word can have several. */
 .flashcard-sentences {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   font-size: clamp(0.95rem, 2.5vw, 1.1rem);
   font-style: italic;
   color: var(--color-ink-muted);
@@ -923,7 +927,11 @@ a.missed-limit-pick:hover { border-color: var(--color-primary); }
 }
 .quiz-feedback-yours { font-style: italic; }
 .quiz-feedback-definition { font-size: 1.05rem; font-weight: 500; margin-top: 6px; overflow-wrap: anywhere; }
+/* One child div per example sentence — a word can have several. */
 .quiz-feedback-sentence {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   font-family: var(--font-quiz);
   font-style: italic;
   color: var(--color-ink-muted);

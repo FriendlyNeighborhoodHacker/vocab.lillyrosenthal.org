@@ -91,6 +91,32 @@ final class QuizManagementTest extends TestCase
         $this->assertSame('The storm ' . QuizManagement::BLANK . ' overnight.', $prompt);
     }
 
+    public function testFillBlankPromptReadsSentencesStoredAsAJsonArray(): void
+    {
+        $stored = WordSentences::normalizeInput('["A first line with nothing useful.", "The storm abated overnight."]');
+        $prompt = QuizManagement::buildFillBlankPrompt((string)$stored, 'abate');
+
+        $this->assertSame('The storm ' . QuizManagement::BLANK . ' overnight.', $prompt);
+    }
+
+    public function testFillBlankAcceptsAFormUsedInAnyOfTheWordsSentences(): void
+    {
+        $id = WordManagement::addWord(
+            $this->adminCtx,
+            'placate',
+            'to soothe',
+            '["He tried to placate her.", "The placating tone helped."]'
+        );
+        $row = WordManagement::findById($id);
+
+        // The prompt blanks the first sentence, but "placating" appears in the
+        // second — both forms count.
+        $this->assertSame(
+            QuizManagement::RESULT_CORRECT,
+            QuizManagement::judgeAnswer('placating', $row, QuizManagement::MODE_FILL_BLANK)
+        );
+    }
+
     public function testDefinitionThatContainsTheWordIsMaskedToo(): void
     {
         $masked = QuizManagement::maskWordInText('to abate is to lessen', 'abate');
