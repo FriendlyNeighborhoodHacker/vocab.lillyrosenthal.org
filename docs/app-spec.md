@@ -193,7 +193,9 @@ a "public computer" checkbox on login skips it.
 - `words` — the global list: word (unique), definition, sentences, synonyms,
   sort_order. `sentences` is a JSON array of strings (a word can have several
   example sentences), NULL when none; `WordSentences` is the only thing that
-  encodes/decodes it, and it still reads the pre-migration plain-text values.
+  encodes/decodes it. On the way in it accepts a JSON array, one sentence per
+  line, or `|`-separated; on the way out it still reads the pre-migration
+  plain-text values.
 - `tags` + `word_tags` — global many-to-many "decks" on words.
 - `user_word_state` — one row per user×word touched: is_flagged, last_mark
   (got_it / needs_review), per-mark counters, last_reviewed_at.
