@@ -159,6 +159,7 @@ header_html(QuizManagement::modeLabel($mode));
     const ROUND_SETTINGS = <?= json_encode($settingsQuery) ?>;
     const CSRF = <?= json_encode(csrf_token()) ?>;
   </script>
+  <?= ApplicationUI::jsScript('/quiz/celebrations.js') ?>
   <?= ApplicationUI::jsScript('/quiz/quiz.js') ?>
 <?php endif; ?>
 

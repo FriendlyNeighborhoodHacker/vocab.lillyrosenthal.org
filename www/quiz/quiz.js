@@ -397,6 +397,9 @@
     var cheer;
     if (res.result === 'correct') {
       cheer = STREAK_CHEERS[streak] || pick(CHEERS);
+      // The full song-and-dance (sound + fullscreen animation, cycling
+      // through six of them) lives in celebrations.js.
+      if (window.vocabCelebrate) window.vocabCelebrate();
     } else if (res.result === 'close') {
       cheer = pick(CLOSE_CHEERS);
     } else if (res.result === 'synonym') {
@@ -495,6 +498,7 @@
         claimBtn.classList.add('hidden');
         fbPoints.textContent = '+' + res.points + ' points — counted!';
         feedback.classList.add('claimed');
+        if (window.vocabCelebrate) window.vocabCelebrate();
         nextBtn.focus();
       })
       .catch(function () {
